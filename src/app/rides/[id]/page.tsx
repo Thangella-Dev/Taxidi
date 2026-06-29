@@ -13,7 +13,7 @@ import { RideRatingForm } from "@/components/RideRatingForm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
-import { calculateFareBreakdown, formatMoney } from "@/lib/fare";
+import { formatMoney } from "@/lib/fare";
 import { getRoutePath } from "@/lib/maps";
 import { getSupabase } from "@/lib/supabase";
 import type { LatLng, RideRequest, RiderProfile } from "@/types/database";
@@ -135,10 +135,6 @@ export default function RideDetails({
     };
   }, [ride]);
 
-  const fareBreakdown = ride ? calculateFareBreakdown(ride.fare_estimate) : null;
-  const companyCommission = ride?.company_commission ?? fareBreakdown?.companyCommission ?? null;
-  const riderEarning = ride?.rider_earning ?? fareBreakdown?.riderEarning ?? null;
-
   return (
     <AppShell title="Ride details">
       <div className="mb-4">
@@ -177,12 +173,12 @@ export default function RideDetails({
               </div>
             </Card>
             <Card className="rounded-2xl p-4">
-              <p className="font-black">Payment split</p>
-              <p className="mt-1 text-sm text-muted-foreground">Taxiro takes 7% from every ride; the rider receives the remaining 93%.</p>
+              <p className="font-black">Customer payment</p>
+              <p className="mt-1 text-sm text-muted-foreground">Fare and payment method for this ride. Rider earning details are shown in the rider workspace.</p>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
                 <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Fare</p><p className="font-black">{formatMoney(ride.fare_estimate)}</p></div>
-                <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Taxiro</p><p className="font-black">{formatMoney(companyCommission)}</p></div>
-                <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Rider</p><p className="font-black">{formatMoney(riderEarning)}</p></div>
+                <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Method</p><p className="font-black uppercase">{ride.payment_method ?? "cash"}</p></div>
+                <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Status</p><p className="font-black capitalize">{ride.payment_status ?? "pending"}</p></div>
               </div>
               {ride.payment_status === "awaiting_payment" ? (
                 <p className="mt-3 rounded-2xl bg-secondary p-3 text-sm font-semibold">Pay the rider now. The ride completes after the rider confirms payment received.</p>
@@ -192,7 +188,7 @@ export default function RideDetails({
               <Card className="rounded-2xl border-primary/20 bg-secondary p-4">
                 <p className="text-sm font-semibold">Private ride code</p>
                 <p className="mt-1 text-xs text-muted-foreground">Show this only to your assigned rider before the ride starts.</p>
-                <p className="mt-3 font-mono text-4xl font-black tracking-[0.35em] text-primary">{confirmationCode ?? "----"}</p>
+                <p className="mt-3 font-mono text-4xl font-black tracking-[0.35em] text-primary">{confirmationCode ?? "Loading..."}</p>
               </Card>
             ) : null}
             {["assigned", "started"].includes(ride.status) ? (

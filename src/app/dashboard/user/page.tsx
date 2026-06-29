@@ -99,40 +99,35 @@ export default function UserDashboard() {
       return;
     }
 
-    const [codeResult, riderResult] = await Promise.all([
-      supabase.from("ride_confirmation_codes").select("*").in("ride_id", rideIds),
-      supabase.from("rider_locations").select("*"),
-    ]);
+    const riderResult = await supabase.from("rider_locations").select("*");
 
-    const nextCodes = (codeResult.data as RideConfirmationCode[] | null)?.reduce<Record<string, string>>(
-      (codes, row) => {
-        codes[row.ride_id] = row.code;
-        return codes;
-      },
-      {},
-    ) ?? {};
+    const activeCodeRides = userRides.filter((ride) => ["assigned", "started"].includes(ride.status));
+    const nextCodes: Record<string, string> = {};
 
-    const ridesNeedingCodes = userRides.filter(
-      (ride) => ["assigned", "started"].includes(ride.status) && !nextCodes[ride.id],
-    );
-
-    if (ridesNeedingCodes.length) {
-      const repairedCodes = await Promise.all(
-        ridesNeedingCodes.map(async (ride) => {
-          const { data: code } = await supabase.rpc("get_or_create_ride_confirmation_code", {
+    if (activeCodeRides.length) {
+      const codeResults = await Promise.all(
+        activeCodeRides.map(async (ride) => {
+          const { data: code, error: codeError } = await supabase.rpc("get_or_create_ride_confirmation_code", {
             p_ride_id: ride.id,
           });
-          return { code: typeof code === "string" ? code : null, rideId: ride.id };
+          return {
+            code: typeof code === "string" ? code : null,
+            error: codeError?.message ?? null,
+            rideId: ride.id,
+          };
         }),
       );
-      repairedCodes.forEach((item) => {
+
+      codeResults.forEach((item) => {
         if (item.code) nextCodes[item.rideId] = item.code;
       });
+
+      const firstCodeError = codeResults.find((item) => item.error)?.error;
+      if (firstCodeError) {
+        setMessage(firstCodeError);
+      }
     }
 
-    if (codeResult.error) {
-      setMessage(codeResult.error.message);
-    }
     setConfirmationCodes(nextCodes);
     if (riderResult.data) {
       setRiderLocations(riderResult.data as RiderLocation[]);
@@ -1003,9 +998,6 @@ function ActiveUserRide({
     : "Code verified. The live route now follows the trip toward your drop location.";
   const liveEta = routeSummary?.durationMin ?? ride.estimated_duration_min;
   const liveDistance = routeSummary?.distanceKm ?? ride.distance_km;
-  const fareBreakdown = calculateFareBreakdown(ride.fare_estimate);
-  const companyCommission = ride.company_commission ?? fareBreakdown.companyCommission;
-  const riderEarning = ride.rider_earning ?? fareBreakdown.riderEarning;
 
   return (
     <div className="grid gap-4">
@@ -1071,35 +1063,31 @@ function ActiveUserRide({
       <div className="rounded-[1.5rem] border border-border bg-card p-4 shadow-sm">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-black">Fare and payment</p>
+            <p className="text-sm font-black">Your fare</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Final fare is fixed from the booked route. Company share is 7%; rider receives 93%.
+              This is the customer fare saved when the ride was booked. Rider earning and Taxiro share are shown only in the rider/admin views.
             </p>
           </div>
           <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[11px] font-black uppercase text-secondary-foreground">
             {ride.payment_status ?? "pending"}
           </span>
         </div>
-        <div className="mt-3 grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 text-center">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-center">
           <div className="min-w-0 rounded-2xl bg-muted p-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Fare</p>
             <p className="mt-1 font-black">{formatMoney(ride.fare_estimate)}</p>
           </div>
           <div className="min-w-0 rounded-2xl bg-muted p-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Company</p>
-            <p className="mt-1 font-black">{formatMoney(companyCommission)}</p>
-          </div>
-          <div className="min-w-0 rounded-2xl bg-muted p-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Rider</p>
-            <p className="mt-1 font-black">{formatMoney(riderEarning)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Pay by</p>
+            <p className="mt-1 font-black uppercase">{ride.payment_method ?? "cash"}</p>
           </div>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           {ride.payment_status === "awaiting_payment"
-            ? "Pay the rider now. The ride completes after the rider confirms payment received."
+            ? "Pay the rider at drop. The ride completes after the rider confirms payment received."
             : ride.payment_status === "paid"
               ? "Payment confirmed. Ride is completed."
-              : `Payment mode: ${(ride.payment_method ?? "cash").toUpperCase()}`}
+              : "No payment is due until the trip reaches the drop point."}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -1124,7 +1112,7 @@ function ActiveUserRide({
           <div className="mt-2 grid gap-3 sm:flex sm:items-end sm:justify-between">
             <p className="text-xs text-muted-foreground">Required before the ride starts.</p>
             <span className="font-mono text-3xl font-semibold tracking-[0.28em] text-primary sm:tracking-[0.35em]">
-              {code ?? "----"}
+              {code ?? "Loading..."}
             </span>
           </div>
         </div>
