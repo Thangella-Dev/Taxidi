@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import L from "leaflet";
+import { MapPin } from "lucide-react";
 import {
   Circle,
   MapContainer,
@@ -63,14 +64,50 @@ function ClickHandler({ onPick }: { onPick?: (point: LatLng) => void }) {
   return null;
 }
 
+function CenterSelection({
+  active,
+  initialCenter,
+  onChange,
+}: {
+  active: boolean;
+  initialCenter?: LatLng | null;
+  onChange?: (point: LatLng) => void;
+}) {
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+  const map = useMapEvents({
+    moveend() {
+      if (!active) return;
+      const center = map.getCenter();
+      onChangeRef.current?.({ lat: center.lat, lng: center.lng });
+    },
+  });
+
+  useEffect(() => {
+    if (!active) return;
+    if (initialCenter) {
+      map.setView([initialCenter.lat, initialCenter.lng], Math.max(map.getZoom(), 16), { animate: true });
+    } else {
+      const center = map.getCenter();
+      onChangeRef.current?.({ lat: center.lat, lng: center.lng });
+    }
+  }, [active, initialCenter, map]);
+
+  return null;
+}
+
 function FitMap({
   demandRides,
+  disabled,
   drop,
   pickup,
   riders,
   route,
 }: {
   demandRides: RideRequest[];
+  disabled?: boolean;
   drop?: LatLng | null;
   pickup?: LatLng | null;
   riders: RiderLocation[];
@@ -79,6 +116,7 @@ function FitMap({
   const map = useMap();
 
   useEffect(() => {
+    if (disabled) return;
     const points = [...route];
     if (pickup) points.push(pickup);
     if (drop) points.push(drop);
@@ -95,7 +133,7 @@ function FitMap({
     if (center) {
       map.setView([center.lat, center.lng], Math.max(map.getZoom(), 13), { animate: true });
     }
-  }, [demandRides, drop, map, pickup, riders, route]);
+  }, [demandRides, disabled, drop, map, pickup, riders, route]);
 
   return null;
 }
@@ -113,17 +151,23 @@ export function MapPicker({
   demandRides = [],
   drop,
   onPick,
+  onSelectionChange,
   pickup,
   riders = [],
   route = [],
+  selectionCenter,
+  selectionMode = null,
 }: {
   className?: string;
   demandRides?: RideRequest[];
   drop?: LatLng | null;
   onPick?: (point: LatLng) => void;
+  onSelectionChange?: (point: LatLng) => void;
   pickup?: LatLng | null;
   riders?: RiderLocation[];
   route?: LatLng[];
+  selectionCenter?: LatLng | null;
+  selectionMode?: "pickup" | "drop" | null;
 }) {
   const center = pickup ?? drop ?? { lat: 17.385, lng: 78.4867 };
 
@@ -139,12 +183,13 @@ export function MapPicker({
         scrollWheelZoom
         zoom={12}
       >
-        <FitMap demandRides={demandRides} drop={drop} pickup={pickup} riders={riders} route={route} />
+        <FitMap demandRides={demandRides} disabled={Boolean(selectionMode)} drop={drop} pickup={pickup} riders={riders} route={route} />
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <ClickHandler onPick={onPick} />
+        <ClickHandler onPick={selectionMode ? undefined : onPick} />
+        <CenterSelection active={Boolean(selectionMode)} initialCenter={selectionCenter} onChange={onSelectionChange} />
         {route.length ? (
           <Polyline
             pathOptions={{ color: "#101713", opacity: 0.88, weight: 6 }}
@@ -212,6 +257,14 @@ export function MapPicker({
           </Fragment>
         ))}
       </MapContainer>
+      {selectionMode ? (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1000] flex items-center justify-center">
+          <div className="taxiro-center-pin">
+            <MapPin className="size-12 fill-[#dbf86f] stroke-[#101713] stroke-[2.5]" />
+            <span />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

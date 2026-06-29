@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Bike, CheckCircle2, ImageUp, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -143,7 +144,7 @@ export function RiderIdentitySettings({ riderId }: { riderId: string }) {
             <ImageUp className="size-4" />
             UPI QR preview
           </p>
-          <img alt="Rider UPI QR code" className="max-h-48 rounded-xl border border-border bg-white object-contain p-2" src={upiQrImageUrl} />
+          <Image alt="Rider UPI QR code" className="max-h-48 rounded-xl border border-border bg-white object-contain p-2" height={512} src={upiQrImageUrl} unoptimized width={512} />
         </div>
       ) : null}
 

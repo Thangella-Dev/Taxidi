@@ -8,6 +8,31 @@ export type RiderTrackingUpdate = LatLng & {
   speed: number | null;
 };
 
+export function getPreciseCurrentLocation(onProgress?: (accuracyM: number) => void) {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    let best: GeolocationPosition | null = null;
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        if (!best || position.coords.accuracy < best.coords.accuracy) {
+          best = position;
+          onProgress?.(Math.round(position.coords.accuracy));
+        }
+        if (position.coords.accuracy <= 25) finish(position);
+      },
+      (error) => finish(best ?? undefined, error),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 18_000 },
+    );
+    const timer = window.setTimeout(() => finish(best ?? undefined), 18_000);
+
+    function finish(position?: GeolocationPosition, error?: GeolocationPositionError) {
+      window.clearTimeout(timer);
+      navigator.geolocation.clearWatch(watchId);
+      if (position) resolve(position);
+      else reject(error ?? new Error("Choose your location on the map."));
+    }
+  });
+}
+
 export function watchRiderLocation({
   isAvailable,
   onError,

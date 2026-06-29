@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Bike, CalendarClock, Clock3, IndianRupee, MapPin, Navigation, ShieldCheck } from "lucide-react";
 
@@ -135,6 +136,9 @@ export default function RideDetails({
     };
   }, [ride]);
 
+  const isCustomer = Boolean(ride && userId === ride.user_id);
+  const isAssignedRider = Boolean(ride && userId === ride.assigned_rider_id);
+
   return (
     <AppShell title="Ride details">
       <div className="mb-4">
@@ -180,8 +184,8 @@ export default function RideDetails({
                 <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Method</p><p className="font-black uppercase">{ride.payment_method ?? "cash"}</p></div>
                 <div className="rounded-2xl bg-muted p-3"><p className="text-xs text-muted-foreground">Status</p><p className="font-black capitalize">{ride.payment_status ?? "pending"}</p></div>
               </div>
-              {ride.payment_status === "awaiting_payment" ? (
-                <p className="mt-3 rounded-2xl bg-secondary p-3 text-sm font-semibold">Pay the rider now. The ride completes after the rider confirms payment received.</p>
+              {isCustomer && ride.payment_status === "awaiting_payment" ? (
+                <p className="mt-3 rounded-2xl bg-secondary p-3 text-sm font-semibold">Pay the rider now. For UPI, ask the rider to show their QR. The ride completes after they confirm payment.</p>
               ) : null}
             </Card>
             {userId === ride.user_id && ["assigned", "started"].includes(ride.status) ? (
@@ -212,11 +216,11 @@ export default function RideDetails({
                     value={riderProfile.vehicle_number ?? "Pending rider update"}
                   />
                 </div>
-                {ride.payment_method === "upi" && (ride.payment_status === "awaiting_payment" || ride.payment_status === "paid") ? (
+                {isAssignedRider && ride.payment_method === "upi" && ride.payment_status === "awaiting_payment" ? (
                   <div className="mt-3 rounded-2xl bg-muted p-3">
-                    <p className="text-sm font-black">Rider UPI payment</p>
+                    <p className="text-sm font-black">Show your UPI QR to the customer</p>
                     {riderProfile.upi_id ? <p className="mt-1 text-sm text-muted-foreground">UPI ID: {riderProfile.upi_id}</p> : null}
-                    {riderProfile.upi_qr_image_url ? <img alt="Rider UPI QR code" className="mt-3 max-h-56 rounded-xl border border-border bg-white object-contain p-2" src={riderProfile.upi_qr_image_url} /> : <p className="mt-2 text-sm text-muted-foreground">Rider has not uploaded a UPI QR image.</p>}
+                    {riderProfile.upi_qr_image_url ? <Image alt="Rider UPI QR code" className="mt-3 max-h-56 rounded-xl border border-border bg-white object-contain p-2" height={512} src={riderProfile.upi_qr_image_url} unoptimized width={512} /> : <p className="mt-2 text-sm text-muted-foreground">Rider has not uploaded a UPI QR image.</p>}
                   </div>
                 ) : null}
                 <p className="mt-3 text-xs font-semibold capitalize text-muted-foreground">

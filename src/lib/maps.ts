@@ -10,7 +10,10 @@ const nominatimBase =
 const osrmBase =
   process.env.NEXT_PUBLIC_OSRM_BASE_URL ?? "https://router.project-osrm.org";
 
-export async function searchPlaces(query: string): Promise<SearchResult[]> {
+export async function searchPlaces(
+  query: string,
+  signal?: AbortSignal,
+): Promise<SearchResult[]> {
   if (query.trim().length < 3) {
     return [];
   }
@@ -23,7 +26,9 @@ export async function searchPlaces(query: string): Promise<SearchResult[]> {
     q: query,
   });
 
-  const response = await fetch(`${nominatimBase}/search?${params.toString()}`);
+  const response = await fetch(`${nominatimBase}/search?${params.toString()}`, {
+    signal,
+  });
   if (!response.ok) {
     throw new Error("Location search failed");
   }

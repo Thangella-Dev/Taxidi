@@ -38,6 +38,7 @@ import { ensureProfile, getCurrentUser, getProfile } from "@/lib/auth";
 import { getRoutePath, getRouteSummary, reverseGeocode } from "@/lib/maps";
 import { calculateFareBreakdown, estimateBikeFare, formatMoney, getUserCancellationFine } from "@/lib/fare";
 import { getSupabase } from "@/lib/supabase";
+import { getPreciseCurrentLocation } from "@/lib/tracking";
 import { useLiveResync } from "@/lib/useLiveResync";
 import type {
   LatLng,
@@ -57,6 +58,8 @@ export default function UserDashboard() {
   const [drop, setDrop] = useState<LatLng | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapPickMode, setMapPickMode] = useState<"pickup" | "drop" | null>(null);
+  const [mapCandidate, setMapCandidate] = useState<LatLng | null>(null);
+  const [mapSelectionStart, setMapSelectionStart] = useState<LatLng | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [panelView, setPanelView] = useState<"book" | "rides">("book");
@@ -274,60 +277,59 @@ export default function UserDashboard() {
     };
   }, [loadRides]);
 
-  function handleMapPick(point: LatLng) {
-    const selected = {
-      ...point,
-      address: `Map selected ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
-    };
-    if (clickTarget === "pickup") {
-      setPickup(selected);
-    } else {
-      setDrop(selected);
-    }
-    if (mapPickMode) {
-      setMapPickMode(null);
-      setMessage(`${clickTarget === "pickup" ? "Pickup" : "Drop"} selected from map.`);
-    }
-  }
-
   function startMapPick(target: "pickup" | "drop") {
+    const start = target === "pickup"
+      ? pickup ?? { lat: 17.385, lng: 78.4867 }
+      : drop ?? pickup ?? { lat: 17.385, lng: 78.4867 };
     setClickTarget(target);
+    setMapCandidate(start);
+    setMapSelectionStart(start);
     setMapPickMode(target);
-    setMessage(`Tap anywhere on the map to set ${target}.`);
+    setMessage(`Move the map until the pin is exactly over your ${target}, then confirm.`);
   }
 
-  function detectPickupLocation() {
+  async function confirmMapPick() {
+    if (!mapCandidate || !mapPickMode) return;
+    setMessage("Confirming the selected address...");
+    const address = await reverseGeocode(mapCandidate);
+    const selected = {
+      ...mapCandidate,
+      address: address ?? `Pinned location ${mapCandidate.lat.toFixed(5)}, ${mapCandidate.lng.toFixed(5)}`,
+    };
+    if (mapPickMode === "pickup") setPickup(selected);
+    else setDrop(selected);
+    setMapPickMode(null);
+    setMapCandidate(null);
+    setMapSelectionStart(null);
+    setMessage(`${clickTarget === "pickup" ? "Pickup" : "Drop"} pinned on the map.`);
+  }
+  async function detectPickupLocation() {
     if (!navigator.geolocation) {
       setMessage("Location detection is not supported in this browser.");
       return;
     }
 
-    setMessage("Detecting your current location...");
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const detected = {
-          address: "Current location",
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        setPickupAccuracy(Math.round(position.coords.accuracy));
-        setPickup(detected);
-        setClickTarget("drop");
-        setMapPickMode(null);
-        setMessage("Location found. Getting address...");
-        const address = await reverseGeocode(detected);
-        setPickup({ ...detected, address: address ?? "Current location" });
-        setMessage(`Pickup set${position.coords.accuracy ? ` • +/-${Math.round(position.coords.accuracy)}m` : ""}. Now choose destination.`);
-      },
-      (error) => {
-        setMessage(error.message || "Location permission denied, search or choose on map.");
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 30_000,
-        timeout: 12_000,
-      },
-    );
+    setMessage("Finding your precise GPS location...");
+    try {
+      const position = await getPreciseCurrentLocation((accuracy) => {
+        setPickupAccuracy(accuracy);
+        setMessage(`Improving GPS accuracy... currently +/-${accuracy}m`);
+      });
+      const detected = {
+        address: "Current location",
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      setPickupAccuracy(Math.round(position.coords.accuracy));
+      setPickup(detected);
+      setClickTarget("drop");
+      setMapPickMode(null);
+      const address = await reverseGeocode(detected);
+      setPickup({ ...detected, address: address ?? "Current location" });
+      setMessage(`Pickup set within about ${Math.round(position.coords.accuracy)}m. You can fine-tune it on the map.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Location permission denied. Search or choose on map.");
+    }
   }
 
   async function createRide() {
@@ -550,10 +552,12 @@ export default function UserDashboard() {
         <DynamicMapPicker
           className="h-[38svh] min-h-[16rem] overflow-hidden sm:h-[100svh] sm:min-h-[100svh]"
           drop={mapDrop}
-          onPick={handleMapPick}
+          onSelectionChange={setMapCandidate}
           pickup={mapPickup}
           riders={assignedRiderLocation ? [assignedRiderLocation] : []}
           route={routePath}
+          selectionCenter={mapSelectionStart}
+          selectionMode={mapPickMode}
         />
 
         {!mapPickMode ? (
@@ -827,13 +831,29 @@ export default function UserDashboard() {
           </div>
         ) : null}
         {mapPickMode ? (
-          <button
+          <div
             className="absolute inset-x-2 top-3 z-[1300] rounded-[1.5rem] bg-[#101713] px-4 py-3 text-center text-sm font-black text-white shadow-2xl sm:left-1/2 sm:right-auto sm:w-[24rem] sm:max-w-[calc(100%-0.75rem)] sm:-translate-x-1/2"
-            onClick={() => setMapPickMode(null)}
-            type="button"
           >
-            Tap map to set {mapPickMode === "pickup" ? "From / pickup" : "To / drop"}. Tap here to cancel.
-          </button>
+            Move the map under the pin to set {mapPickMode === "pickup" ? "your pickup" : "your drop"}.
+          </div>
+        ) : null}
+        {mapPickMode ? (
+          <div className="absolute inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[1300] mx-auto max-w-sm rounded-[1.5rem] border border-white/70 bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+            <p className="text-sm font-black">Is the pin exactly where you need it?</p>
+            <p className="mt-1 text-xs text-muted-foreground">Zoom and move the map for a precise entrance or pickup point.</p>
+            <div className="mt-3 grid grid-cols-[0.7fr_1.3fr] gap-2">
+              <Button onClick={() => {
+                setMapPickMode(null);
+                setMapCandidate(null);
+                setMapSelectionStart(null);
+              }} variant="outline">
+                Cancel
+              </Button>
+              <Button disabled={!mapCandidate} onClick={() => void confirmMapPick()}>
+                Confirm {mapPickMode === "pickup" ? "pickup" : "drop"}
+              </Button>
+            </div>
+          </div>
         ) : null}
         {cancelTarget ? (
           <CancelRideDialog
@@ -1147,20 +1167,14 @@ function ActiveUserRide({
           <div className="mt-3 rounded-2xl bg-secondary p-3">
             <p className="text-sm font-black">Pay your rider</p>
             {ride.payment_method === "upi" ? (
-              riderProfile ? (
-                <div className="mt-2 grid gap-3">
-                  {riderProfile.upi_id ? (
-                    <p className="rounded-xl bg-card p-3 text-sm font-semibold">UPI ID: {riderProfile.upi_id}</p>
-                  ) : null}
-                  {riderProfile.upi_qr_image_url ? (
-                    <img alt="Rider UPI QR code" className="max-h-56 w-full rounded-xl border border-border bg-white object-contain p-2" src={riderProfile.upi_qr_image_url} />
-                  ) : (
-                    <p className="rounded-xl bg-card p-3 text-sm text-muted-foreground">Rider has not uploaded a UPI QR image. Use the UPI ID if available or pay by cash.</p>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-2 rounded-xl bg-card p-3 text-sm text-muted-foreground">Loading rider payment details...</p>
-              )
+              <div className="mt-2 grid gap-2">
+                <p className="rounded-xl bg-card p-3 text-sm font-semibold">
+                  Ask the rider to show their Taxiro UPI QR, then scan it with your payment app and pay {formatMoney(ride.fare_estimate)}.
+                </p>
+                {riderProfile?.upi_id ? (
+                  <p className="rounded-xl bg-card p-3 text-sm text-muted-foreground">UPI ID fallback: {riderProfile.upi_id}</p>
+                ) : null}
+              </div>
             ) : (
               <p className="mt-2 rounded-xl bg-card p-3 text-sm font-semibold">Cash selected. Pay {formatMoney(ride.fare_estimate)} directly to the rider.</p>
             )}

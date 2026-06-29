@@ -299,6 +299,23 @@ button {
   line-height: 1;
 }
 
+.taxiro-center-pin {
+  filter: drop-shadow(0 12px 10px rgb(16 23 19 / 24%));
+  position: relative;
+  transform: translateY(-50%);
+}
+
+.taxiro-center-pin span {
+  background: rgb(16 23 19 / 24%);
+  border-radius: 999px;
+  bottom: -4px;
+  height: 6px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 18px;
+}
+
 #__next,
 main,
 section,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -34,7 +35,7 @@ import { calculateFareBreakdown, formatMoney } from "@/lib/fare";
 import { watchRiderLocation, type RiderTrackingUpdate } from "@/lib/tracking";
 import { getSupabase } from "@/lib/supabase";
 import { useLiveResync } from "@/lib/useLiveResync";
-import type { LatLng, Profile, RideRequest, RiderLocation } from "@/types/database";
+import type { LatLng, Profile, RideRequest, RiderLocation, RiderProfile } from "@/types/database";
 
 export default function RiderDashboard() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export default function RiderDashboard() {
   const [message, setMessage] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [riderLocation, setRiderLocation] = useState<RiderLocation | null>(null);
+  const [riderProfile, setRiderProfile] = useState<RiderProfile | null>(null);
   const [riders, setRiders] = useState<RiderLocation[]>([]);
   const [rides, setRides] = useState<RideRequest[]>([]);
   const [routePath, setRoutePath] = useState<LatLng[]>([]);
@@ -57,7 +59,7 @@ export default function RiderDashboard() {
     if (!supabase) {
       return;
     }
-    const [rideResult, riderResult, myLocationResult] = await Promise.all([
+    const [rideResult, riderResult, myLocationResult, riderProfileResult] = await Promise.all([
       supabase
         .from("ride_requests")
         .select("*")
@@ -65,6 +67,7 @@ export default function RiderDashboard() {
         .order("created_at", { ascending: false }),
       supabase.from("rider_locations").select("*"),
       supabase.from("rider_locations").select("*").eq("rider_id", riderId).maybeSingle(),
+      supabase.from("rider_profiles").select("*").eq("rider_id", riderId).maybeSingle(),
     ]);
 
     if (rideResult.error) {
@@ -81,6 +84,7 @@ export default function RiderDashboard() {
       setLocation({ lat: current.lat, lng: current.lng });
       setGpsStatus(current.last_seen_at ? `Last live update ${formatTrackingAge(current.last_seen_at)}` : "Tap refresh or allow GPS tracking.");
     }
+    setRiderProfile((riderProfileResult.data as RiderProfile | null) ?? null);
   }, []);
 
   useEffect(() => {
@@ -499,6 +503,7 @@ export default function RiderDashboard() {
                 location={location}
                 routeSummary={routeSummary}
                 riderLocation={riderLocation}
+                riderProfile={riderProfile}
                 onCodeChange={(value) =>
                   setCodes((current) => ({
                     ...current,
@@ -726,6 +731,7 @@ function ActiveRiderJob({
   directionsUrl,
   location,
   riderLocation,
+  riderProfile,
   routeSummary,
   onCodeChange,
   onPaymentReceived,
@@ -739,6 +745,7 @@ function ActiveRiderJob({
   directionsUrl: (from: LatLng, to: LatLng) => string;
   location: LatLng;
   riderLocation: RiderLocation | null;
+  riderProfile: RiderProfile | null;
   routeSummary: { distanceKm: number | null; durationMin: number | null } | null;
   onCodeChange: (value: string) => void;
   onPaymentReceived: () => void;
@@ -840,9 +847,27 @@ function ActiveRiderJob({
             <div className="rounded-2xl bg-secondary p-2"><p className="text-[10px] font-bold uppercase">You</p><p className="font-black">{formatMoney(riderEarning)}</p></div>
           </div>
           {ride.payment_status === "awaiting_payment" ? (
-            <Button className="mt-4 h-14 w-full rounded-full bg-secondary text-base font-black text-[#101713] hover:bg-secondary/90" onClick={onPaymentReceived}>
-              Payment received - complete ride
-            </Button>
+            <div className="mt-4 rounded-2xl bg-white p-3 text-[#101713]">
+              {ride.payment_method === "upi" ? (
+                <div className="grid gap-3 text-center">
+                  <div>
+                    <p className="font-black">Show this QR to the customer</p>
+                    <p className="mt-1 text-xs text-black/60">Keep this screen open while they scan and pay {formatMoney(ride.fare_estimate)}.</p>
+                  </div>
+                  {riderProfile?.upi_qr_image_url ? (
+                    <Image alt="Your UPI QR code" className="mx-auto max-h-64 w-full rounded-xl border border-border bg-white object-contain p-2" height={512} src={riderProfile.upi_qr_image_url} unoptimized width={512} />
+                  ) : (
+                    <p className="rounded-xl bg-muted p-3 text-sm">Upload your UPI QR from the rider menu, or collect cash for this ride.</p>
+                  )}
+                  {riderProfile?.upi_id ? <p className="text-sm font-semibold">UPI ID: {riderProfile.upi_id}</p> : null}
+                </div>
+              ) : (
+                <p className="text-center text-sm font-semibold">Collect {formatMoney(ride.fare_estimate)} in cash from the customer.</p>
+              )}
+              <Button className="mt-4 h-14 w-full rounded-full bg-secondary text-base font-black text-[#101713] hover:bg-secondary/90" onClick={onPaymentReceived}>
+                Payment received - complete ride
+              </Button>
+            </div>
           ) : (
             <Button className="mt-4 h-14 w-full rounded-full bg-secondary text-base font-black text-[#101713] hover:bg-secondary/90" onClick={onReachedDrop}>
               Reached drop - collect payment
