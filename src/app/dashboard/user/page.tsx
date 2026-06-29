@@ -44,6 +44,7 @@ import type {
   RideConfirmationCode,
   RideRequest,
   RiderLocation,
+  RiderProfile,
 } from "@/types/database";
 
 export default function UserDashboard() {
@@ -63,6 +64,7 @@ export default function UserDashboard() {
   const [pickupAccuracy, setPickupAccuracy] = useState<number | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [riderLocations, setRiderLocations] = useState<RiderLocation[]>([]);
+  const [riderProfiles, setRiderProfiles] = useState<Record<string, RiderProfile>>({});
   const [rideNote, setRideNote] = useState("");
   const [routePath, setRoutePath] = useState<LatLng[]>([]);
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number | null; durationMin: number | null } | null>(null);
@@ -96,10 +98,17 @@ export default function UserDashboard() {
     if (!rideIds.length) {
       setConfirmationCodes({});
       setRiderLocations([]);
+      setRiderProfiles({});
       return;
     }
 
-    const riderResult = await supabase.from("rider_locations").select("*");
+    const assignedRiderIds = Array.from(new Set(userRides.map((ride) => ride.assigned_rider_id).filter(Boolean) as string[]));
+    const [riderResult, riderProfileResult] = await Promise.all([
+      supabase.from("rider_locations").select("*"),
+      assignedRiderIds.length
+        ? supabase.from("rider_profiles").select("*").in("rider_id", assignedRiderIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
     const activeCodeRides = userRides.filter((ride) => ["assigned", "started"].includes(ride.status));
     const nextCodes: Record<string, string> = {};
@@ -131,6 +140,15 @@ export default function UserDashboard() {
     setConfirmationCodes(nextCodes);
     if (riderResult.data) {
       setRiderLocations(riderResult.data as RiderLocation[]);
+    }
+    if (riderProfileResult.error) {
+      setMessage(riderProfileResult.error.message);
+    } else if (riderProfileResult.data) {
+      const nextProfiles = ((riderProfileResult.data as RiderProfile[]) ?? []).reduce<Record<string, RiderProfile>>((profiles, item) => {
+        profiles[item.rider_id] = item;
+        return profiles;
+      }, {});
+      setRiderProfiles(nextProfiles);
     }
   }, []);
 
@@ -205,6 +223,26 @@ export default function UserDashboard() {
             ...current,
             [incoming.ride_id]: incoming.code,
           }));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rider_profiles" },
+        (payload) => {
+          if (!activeUserId) return;
+          if (payload.eventType === "DELETE") {
+            const deleted = payload.old as Partial<RiderProfile>;
+            if (deleted.rider_id) {
+              setRiderProfiles((current) => {
+                const next = { ...current };
+                delete next[deleted.rider_id as string];
+                return next;
+              });
+            }
+            return;
+          }
+          const incoming = payload.new as RiderProfile;
+          setRiderProfiles((current) => ({ ...current, [incoming.rider_id]: incoming }));
         },
       )
       .on(
@@ -424,6 +462,7 @@ export default function UserDashboard() {
   const assignedRiderLocation = activeRide
     ? riderLocations.find((rider) => rider.rider_id === activeRide.assigned_rider_id)
     : null;
+  const assignedRiderProfile = activeRide?.assigned_rider_id ? riderProfiles[activeRide.assigned_rider_id] ?? null : null;
   const routeFrom = useMemo(() => {
     if (activeRide?.assigned_rider_id && assignedRiderLocation && ["assigned", "started"].includes(activeRide.status)) {
       return { lat: assignedRiderLocation.lat, lng: assignedRiderLocation.lng };
@@ -545,6 +584,7 @@ export default function UserDashboard() {
                 onCancel={() => setCancelTarget(activeRide)}
                 onReady={() => void markReady(activeRide)}
                 riderLocation={assignedRiderLocation}
+                riderProfile={assignedRiderProfile}
                 routeSummary={routeSummary}
                 ride={activeRide}
                 userId={userId}
@@ -979,6 +1019,7 @@ function ActiveUserRide({
   onCancel,
   onReady,
   riderLocation,
+  riderProfile,
   routeSummary,
   ride,
   userId,
@@ -987,6 +1028,7 @@ function ActiveUserRide({
   onCancel: () => void;
   onReady: () => void;
   riderLocation?: RiderLocation | null;
+  riderProfile?: RiderProfile | null;
   routeSummary: { distanceKm: number | null; durationMin: number | null } | null;
   ride: RideRequest;
   userId: string | null;
@@ -1089,6 +1131,29 @@ function ActiveUserRide({
               ? "Payment confirmed. Ride is completed."
               : "No payment is due until the trip reaches the drop point."}
         </p>
+        {ride.payment_status === "awaiting_payment" ? (
+          <div className="mt-3 rounded-2xl bg-secondary p-3">
+            <p className="text-sm font-black">Pay your rider</p>
+            {ride.payment_method === "upi" ? (
+              riderProfile ? (
+                <div className="mt-2 grid gap-3">
+                  {riderProfile.upi_id ? (
+                    <p className="rounded-xl bg-card p-3 text-sm font-semibold">UPI ID: {riderProfile.upi_id}</p>
+                  ) : null}
+                  {riderProfile.upi_qr_image_url ? (
+                    <img alt="Rider UPI QR code" className="max-h-56 w-full rounded-xl border border-border bg-white object-contain p-2" src={riderProfile.upi_qr_image_url} />
+                  ) : (
+                    <p className="rounded-xl bg-card p-3 text-sm text-muted-foreground">Rider has not uploaded a UPI QR image. Use the UPI ID if available or pay by cash.</p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 rounded-xl bg-card p-3 text-sm text-muted-foreground">Loading rider payment details...</p>
+              )
+            ) : (
+              <p className="mt-2 rounded-xl bg-card p-3 text-sm font-semibold">Cash selected. Pay {formatMoney(ride.fare_estimate)} directly to the rider.</p>
+            )}
+          </div>
+        ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <div className="min-w-0 rounded-2xl bg-muted p-2 sm:p-3">
