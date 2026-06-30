@@ -1,0 +1,40 @@
+# Taxiro
+
+> Taxiro is a map-first predictive bike taxi web app MVP for India. It supports ride-now booking, advance bookings, timed ready signals, rider availability, live foreground tracking, private ride-code verification, assigned chat, transparent fare/rider earning splits, UPI/cash collection flow, admin operations, and safety alert foundations.
+
+## Public Pages
+
+- [Home](/): Taxiro landing and app entry.
+- [About](/about): Product vision, ride lifecycle, live tracking, MVP limits.
+- [Help](/help): Location, booking, payment, safety, and support guidance.
+- [Privacy](/privacy): Data collection and privacy notes.
+- [Rules](/rules): User/rider rules, misuse rules, cancellation, payment, and safety expectations.
+
+## App Routes
+
+- `/auth`: User/rider sign up and sign in.
+- `/dashboard/user`: Authenticated customer booking and active ride workspace.
+- `/dashboard/rider`: Authenticated rider workspace.
+- `/dashboard/admin`: Role-protected operations dashboard.
+- `/rides/[id]`: Authenticated ride details, code, chat, route, payment, and rating context.
+
+## Core Concepts
+
+- Booking modes: ride now and advance booking.
+- Ready signals: users publish 15, 30, or 60 minute readiness windows.
+- Matching: riders see ready jobs and scheduled demand signals while online.
+- Verification: users receive a private 4-digit ride code; riders start the trip only after code verification.
+- Tracking: browser foreground GPS and Supabase Realtime power rider-to-pickup and trip-to-drop updates.
+- Fare: Rs 7/km standard and Rs 8/km during configured IST peak windows.
+- Earnings: Taxiro records 7% company commission and 93% rider earning.
+- Safety: SOS, late-trip, and route-change safety-alert foundations notify matching in-app emergency contacts.
+
+## Tech Stack
+
+Next.js App Router, React, TypeScript, Tailwind CSS, Supabase Auth/Postgres/PostGIS/RLS/RPC/Realtime, Leaflet, OpenStreetMap, Nominatim, and OSRM.
+
+## More Detail
+
+- [Full LLM context](/llms-full.txt)
+- [Sitemap](/sitemap.xml)
+- [Robots](/robots.txt)

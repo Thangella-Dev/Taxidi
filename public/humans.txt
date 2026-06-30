@@ -1,0 +1,9 @@
+# humans.txt
+
+App: Taxiro
+Purpose: Predictive bike taxi web app MVP for India
+Stack: Next.js, React, TypeScript, Tailwind CSS, Supabase, PostGIS, Leaflet, OpenStreetMap, Nominatim, OSRM
+Primary routes: /, /auth, /dashboard/user, /dashboard/rider, /dashboard/admin, /rides/[id]
+Public docs: /about, /help, /privacy, /rules, /llms.txt, /llms-full.txt
+Icon source: public/App Icon.jpeg
+Production URL: configure with NEXT_PUBLIC_SITE_URL

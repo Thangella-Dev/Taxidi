@@ -25,12 +25,14 @@ Completed today:
 - Added admin stats for guest bookings and peak-rate rides.
 - Updated Help and Privacy content for peak pricing and passenger data handling.
 - Created additive Supabase migrations for safety/ready-signal expiry and peak-pricing/passenger details.
+- Added production SEO/app-icon/PWA/AI discovery setup, including favicon, Apple/web app icons, manifest, robots, sitemap, Open Graph image, `llms.txt`, `llms-full.txt`, `humans.txt`, geo metadata, and JSON-LD structured data.
 
 Verification completed:
 
 - TypeScript check passed.
 - Focused ESLint passed for all files changed today.
 - Production build passed on Next.js 16.2.7.
+- Metadata route TypeScript validation passed for manifest, robots, sitemap, and structured metadata files.
 - Git whitespace check passed after formatting cleanup.
 - Fare boundary behavior was checked for standard and peak windows.
 

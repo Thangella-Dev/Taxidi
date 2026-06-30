@@ -1,0 +1,117 @@
+# Taxiro Full LLM Context
+
+## Summary
+
+Taxiro is a bike taxi web application MVP for India. The product is designed around map-first booking, real Supabase-backed accounts and ride records, rider ready demand, foreground live tracking, private ride-code verification, transparent fare splits, and operational admin visibility.
+
+## Product Positioning
+
+Taxiro is not a marketing-only website. It is a working web app MVP with role-based user, rider, and admin experiences. The current implementation intentionally uses free/open stack services for MVP testing: Supabase, OpenStreetMap tiles, Nominatim, OSRM, Leaflet, and Vercel-compatible Next.js deployment.
+
+## Public Brand
+
+- Name: Taxiro
+- Category: Bike taxi, ride hailing, urban mobility
+- Primary geography: India, with Hyderabad-focused examples and coordinates
+- Language: English India (`en-IN`)
+- Canonical production URL is controlled by `NEXT_PUBLIC_SITE_URL`; default fallback is `https://taxiro.vercel.app`.
+
+## User Flow
+
+1. User signs up or signs in.
+2. User chooses ride now or advance booking.
+3. User chooses whether the ride is for themselves or another passenger.
+4. User chooses pickup and drop by search, GPS detection, or map pin.
+5. User sees distance, ETA, fare, fare rate, and payment preference.
+6. User books the ride.
+7. User taps I'm Ready and chooses a 15, 30, or 60 minute signal duration.
+8. A rider accepts the ready ride.
+9. User sees the assigned rider and private confirmation code.
+10. Rider reaches pickup and verifies the code.
+11. Ride starts and tracking switches from rider-to-pickup to rider-to-drop.
+12. Rider reaches drop, collects cash/UPI, confirms payment received, and completes the ride.
+13. User can rate the completed ride.
+
+## Rider Flow
+
+1. Rider signs in with rider role.
+2. Rider goes online and shares foreground browser GPS while the app is open.
+3. Rider sees ready jobs, scheduled demand signals, and On-The-Way route setup.
+4. Rider accepts a ready ride before the ready signal expires.
+5. Rider navigates to pickup.
+6. Rider enters the user's private 4-digit code.
+7. Rider starts the trip and navigates to drop.
+8. Rider collects payment and confirms payment received.
+9. Rider sees fare, Taxiro share, and rider earning.
+
+## Admin Flow
+
+Admin users can view profiles, riders, rides, active rider records, status filters, demand areas, rider verification details, gross fares, Taxiro commission, rider earnings, guest bookings, and peak-rate ride counts.
+
+## Fare Logic
+
+- Standard rate: Rs 7/km.
+- Peak rate: Rs 8/km.
+- Peak windows use India time:
+  - 9:00 AM to 10:30 AM
+  - 5:00 PM to 6:00 PM
+  - 10:00 PM to midnight
+- Fare is locked at booking time with `fare_rate_per_km` and `fare_pricing_period` saved on the ride.
+- Taxiro company commission is 7%.
+- Rider earning is 93%.
+
+## Safety And Notifications
+
+The MVP includes database and client foundations for safety alerts:
+
+- SOS alert
+- Late trip alert
+- Route changed alert
+- In-app emergency contact notification when the emergency contact phone matches a Taxiro profile
+
+This MVP does not yet provide SMS, WhatsApp, native push notifications, or native background tracking.
+
+## Main Data Tables
+
+- `profiles`
+- `ride_requests`
+- `rider_locations`
+- `rider_routes`
+- `ride_status_events`
+- `ride_confirmation_codes`
+- `rider_profiles`
+- `ride_ratings`
+- `ride_chat_messages`
+- `safety_alerts`
+- `app_notifications`
+
+## Important RPC Functions
+
+- `mark_ride_ready_and_assign`
+- `accept_ready_ride`
+- `expire_ready_signals`
+- `verify_ride_code`
+- `complete_ride`
+- `cancel_ride`
+- `mark_ride_reached_drop`
+- `confirm_ride_payment_and_complete`
+- `get_or_create_ride_confirmation_code`
+- `create_safety_alert`
+- `is_admin`
+- `is_rider`
+
+## Production Notes
+
+The app code includes production SEO metadata, app icons, favicon, manifest, robots, sitemap, and LLM context files. Before real production launch, complete remote Supabase migration application, two-device QA, legal/payment review, production support process, security review, and production-grade notification/geocoding decisions.
+
+## Public Files
+
+- `/manifest.webmanifest`
+- `/robots.txt`
+- `/sitemap.xml`
+- `/llms.txt`
+- `/llms-full.txt`
+- `/humans.txt`
+- `/icons/taxiro-icon-192.png`
+- `/icons/taxiro-icon-512.png`
+- `/og/taxiro-og.png`

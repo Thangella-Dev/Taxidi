@@ -60,6 +60,15 @@ As of 30 June 2026, the local application supports authentication and role separ
 - Desktop side panels can collapse sideways; mobile sheets can pull down to reveal map and pull up to restore controls.
 - Accidental page zoom is guarded and Leaflet scroll-wheel zoom is disabled for embedded maps.
 
+### Production SEO, Icons, And Discovery
+
+- App icon source from `public/App Icon.jpeg` is now used for favicon, Apple icon, web app icons, PWA icons, and Microsoft tile icons.
+- Generated `public/og/taxiro-og.png` for Open Graph and Twitter sharing.
+- Added Next.js metadata for canonical URL, keywords, app icons, Apple web app mode, Open Graph, Twitter card, and India/Hyderabad geo tags.
+- Added JSON-LD structured data for Organization, WebApplication, and Service.
+- Added `/manifest.webmanifest`, `/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt`, `/humans.txt`, and `/browserconfig.xml`.
+- Added `NEXT_PUBLIC_SITE_URL` to `.env.example` so deployed canonical and sitemap URLs can point to the final production domain.
+
 ### Safety, Policy, And Support
 
 - Structured cancellation reasons and event history.
@@ -85,6 +94,7 @@ As of 30 June 2026, the local application supports authentication and role separ
 - Added passenger/fare-rate context to rider demand cards and map popups.
 - Added admin search for passenger name/phone plus guest-booking and peak-rate stats.
 - Updated Help and Privacy content for peak pricing and passenger data handling.
+- Added production SEO, PWA icon, social sharing, geo metadata, and LLM discovery files.
 
 ## June 30 Database Additions
 
@@ -117,6 +127,7 @@ Completed through 30 June 2026:
 - All 12 application routes compiled/generated successfully.
 - Fare boundary checks passed for standard and peak windows.
 - `git diff --check` passed after formatting cleanup.
+- Metadata route type validation passed for manifest, robots, sitemap, and global metadata.
 - Earlier route smoke checks, Supabase Realtime publication verification, Git secret-tracking cleanup, and dependency audit checks remain recorded from prior sessions.
 
 Pending for the June 30 release candidate:

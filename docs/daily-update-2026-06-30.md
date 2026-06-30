@@ -30,12 +30,18 @@ Today's work focused on making Taxiro feel closer to a real daily-use ride app: 
 - Updated Help and Privacy pages to explain peak pricing and passenger information storage.
 - Added an additive Supabase migration for fare rate, pricing period, booking-for, and passenger contact fields.
 - Updated the consolidated Supabase schema and TypeScript database types.
+- Added production SEO, app icon, PWA, and AI discovery setup using `public/App Icon.jpeg` as the source image.
+- Generated favicon, Apple icon, web app icons, social preview image, manifest, robots, sitemap, `llms.txt`, `llms-full.txt`, `humans.txt`, and browser tile config.
+- Added canonical metadata, Open Graph, Twitter card metadata, Hyderabad geo tags, and JSON-LD structured data for Organization, WebApplication, and Service.
 
 ## Files And Migrations Added Today
 
 - `src/components/ResponsiveRideSheet.tsx`
 - `supabase/migrations/20260630093000_signal_expiry_and_safety_alerts.sql`
 - `supabase/migrations/20260630130000_distance_pricing_and_passenger_details.sql`
+- `src/app/manifest.ts`, `src/app/robots.ts`, `src/app/sitemap.ts`
+- `public/llms.txt`, `public/llms-full.txt`, `public/humans.txt`, `public/browserconfig.xml`
+- `public/icons/*`, `public/og/taxiro-og.png`, `src/app/icon.png`, `src/app/apple-icon.png`, `src/app/favicon.ico`
 
 ## Verification Status
 

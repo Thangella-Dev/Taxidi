@@ -73,6 +73,7 @@ The MVP currently includes:
 - User/rider/admin dashboards now merge realtime row changes without requiring manual page refresh.
 - Ride chat now refreshes on browser reconnect and tab visibility changes.
 - GitHub push-protection cleanup completed by removing local MCP credentials from Git tracking.
+- Production SEO metadata, sitemap, robots, PWA manifest, app icons, Open Graph image, `llms.txt`, `llms-full.txt`, and `humans.txt`.
 
 ## Main Routes
 
@@ -217,8 +218,8 @@ Schema files:
 - `supabase/migrations/20260623093000_live_tracking_metadata.sql`
 - `supabase/migrations/20260624093000_enable_realtime_publication.sql`
 - `supabase/migrations/20260629093000_taxiro_fare_payment_flow.sql`
-- `supabase/migrations/20260629113000_accepted_ride_cancellation_fine.sql`r
-- `supabase/migrations/20260630093000_signal_expiry_and_safety_alerts.sql`r
+- `supabase/migrations/20260629113000_accepted_ride_cancellation_fine.sql`
+- `supabase/migrations/20260630093000_signal_expiry_and_safety_alerts.sql`
 - `supabase/migrations/20260630130000_distance_pricing_and_passenger_details.sql`
 
 Main tables:
@@ -231,8 +232,8 @@ Main tables:
 - `ride_confirmation_codes`
 - `rider_profiles`
 - `ride_ratings`
-- `ride_chat_messages`r
-- `safety_alerts`r
+- `ride_chat_messages`
+- `safety_alerts`
 - `app_notifications`
 
 Important RPC/functions:
@@ -243,8 +244,8 @@ Important RPC/functions:
 - `complete_ride`
 - `cancel_ride`
 - `mark_ride_reached_drop`
-- `confirm_ride_payment_and_complete`r
-- `expire_ready_signals`r
+- `confirm_ride_payment_and_complete`
+- `expire_ready_signals`
 - `create_safety_alert`
 - `get_or_create_ride_confirmation_code`
 - `is_admin`
@@ -267,11 +268,40 @@ Security:
 Create `.env.local` from `.env.example`.
 
 ```bash
+NEXT_PUBLIC_SITE_URL=https://taxiro.vercel.app
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 NEXT_PUBLIC_OSRM_BASE_URL=https://router.project-osrm.org
 ```
+
+## Production SEO, App Icons, And AI Discovery
+
+Implemented production-facing discovery and install assets:
+
+- App icon source: `public/App Icon.jpeg`.
+- Generated favicon and app icons:
+  - `src/app/favicon.ico`
+  - `src/app/icon.png`
+  - `src/app/apple-icon.png`
+  - `public/icons/taxiro-icon-16.png`
+  - `public/icons/taxiro-icon-32.png`
+  - `public/icons/taxiro-icon-48.png`
+  - `public/icons/taxiro-icon-96.png`
+  - `public/icons/taxiro-icon-180.png`
+  - `public/icons/taxiro-icon-192.png`
+  - `public/icons/taxiro-icon-256.png`
+  - `public/icons/taxiro-icon-512.png`
+- Social preview image: `public/og/taxiro-og.png`.
+- PWA manifest route: `/manifest.webmanifest`.
+- Robots route: `/robots.txt`.
+- Sitemap route: `/sitemap.xml`.
+- AI/LLM discovery files: `/llms.txt` and `/llms-full.txt`.
+- Human-readable build info: `/humans.txt`.
+- Microsoft tile config: `/browserconfig.xml`.
+- Global metadata includes canonical URL, Open Graph, Twitter card, app install metadata, geo tags for Hyderabad/Telangana/India, and JSON-LD structured data for Organization, WebApplication, and Service.
+
+Set `NEXT_PUBLIC_SITE_URL` in Vercel to the final production domain before launch so canonical URLs, sitemap URLs, Open Graph images, and structured data point to the correct host.
 
 ## Local Development
 
@@ -315,17 +345,17 @@ Project documentation:
 - Progress report through 22 June: `docs/taxiro-progress-report-2026-06-08-to-2026-06-22.md`
 - Progress report through 23 June: `docs/taxiro-progress-report-2026-06-08-to-2026-06-23.md`
 - Progress report through 24 June: `docs/taxiro-progress-report-2026-06-08-to-2026-06-24.md`
-- Progress report through 29 June: `docs/taxiro-progress-report-2026-06-08-to-2026-06-29.md`r
+- Progress report through 29 June: `docs/taxiro-progress-report-2026-06-08-to-2026-06-29.md
 - Latest full progress report: `docs/taxiro-progress-report-2026-06-08-to-2026-06-30.md`
 - Daily update for 22 June: `docs/daily-update-2026-06-22.md`
 - Daily update for 23 June: `docs/daily-update-2026-06-23.md`
 - Daily update for 24 June: `docs/daily-update-2026-06-24.md`
-- Daily update for 29 June: `docs/daily-update-2026-06-29.md`r
+- Daily update for 29 June: `docs/daily-update-2026-06-29.md
 - Latest daily update: `docs/daily-update-2026-06-30.md`
 - Manager email for 22 June: `docs/manager-update-email-2026-06-22.md`
 - Manager email for 23 June: `docs/manager-update-email-2026-06-23.md`
 - Manager email for 24 June: `docs/manager-update-email-2026-06-24.md`
-- Manager email for 29 June: `docs/manager-update-email-2026-06-29.md`r
+- Manager email for 29 June: `docs/manager-update-email-2026-06-29.md
 - Latest manager email: `docs/manager-update-email-2026-06-30.md`
 
 ## Development Timeline
@@ -424,6 +454,7 @@ Tuesday - 30 June 2026:
 - Added admin stats for guest bookings and peak-rate rides.
 - Added additive Supabase migrations for ready-signal expiry, safety alerts, peak pricing, and passenger details.
 - Passed TypeScript, focused ESLint, production build, fare boundary checks, and Git whitespace checks.
+- Added production SEO/app-icon/PWA/LLM discovery setup using the app icon from `public/App Icon.jpeg`.
 
 ## Verification Status
 
