@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +17,8 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  Phone,
+  Star,
   Radio,
   Settings,
   ShieldCheck,
@@ -49,6 +52,7 @@ import { useLiveResync } from "@/lib/useLiveResync";
 import { normalizePhone, validateFullName, validatePhone } from "@/lib/validation";
 import { VEHICLE_OPTIONS, getVehicleLabel } from "@/lib/vehicles";
 import type {
+  AssignedRiderDetails,
   LatLng,
   Profile,
   RideConfirmationCode,
@@ -62,6 +66,7 @@ import type {
 export default function UserDashboard() {
   const router = useRouter();
   const [bookingMode, setBookingMode] = useState<"now" | "advance">("now");
+  const [assignedRiderDetails, setAssignedRiderDetails] = useState<Record<string, AssignedRiderDetails>>({});
   const [bookingFor, setBookingFor] = useState<"self" | "other" | null>(null);
   const [cancelTarget, setCancelTarget] = useState<RideRequest | null>(null);
   const [clickTarget, setClickTarget] = useState<"pickup" | "drop">("pickup");
@@ -83,6 +88,7 @@ export default function UserDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [riderLocations, setRiderLocations] = useState<RiderLocation[]>([]);
   const [riderProfiles, setRiderProfiles] = useState<Record<string, RiderProfile>>({});
+  const [riderPhotoUrls, setRiderPhotoUrls] = useState<Record<string, string>>({});
   const [readySignalMinutes, setReadySignalMinutes] = useState<15 | 30 | 60>(30);
   const [readyRideId, setReadyRideId] = useState<string | null>(null);
   const [rideNote, setRideNote] = useState("");
@@ -120,9 +126,11 @@ export default function UserDashboard() {
     const rideIds = userRides.map((ride) => ride.id);
 
     if (!rideIds.length) {
+      setAssignedRiderDetails({});
       setConfirmationCodes({});
       setRiderLocations([]);
       setRiderProfiles({});
+      setRiderPhotoUrls({});
       return;
     }
 
@@ -161,6 +169,34 @@ export default function UserDashboard() {
       }
     }
 
+    const nextRiderDetails: Record<string, AssignedRiderDetails> = {};
+    const nextPhotoUrls: Record<string, string> = {};
+    if (activeCodeRides.length) {
+      const detailResults = await Promise.all(
+        activeCodeRides.map(async (ride) => {
+          const { data: detailRows, error: detailError } = await supabase.rpc("get_assigned_rider_details", {
+            p_ride_id: ride.id,
+          });
+          const detail = (Array.isArray(detailRows) ? detailRows[0] : detailRows) as AssignedRiderDetails | null;
+          let photoUrl = "";
+          if (detail?.photo_path) {
+            const { data: signedPhoto } = await supabase.storage
+              .from("rider-verification")
+              .createSignedUrl(detail.photo_path, 900);
+            photoUrl = signedPhoto?.signedUrl ?? "";
+          }
+          return { detail, error: detailError?.message ?? null, photoUrl, rideId: ride.id };
+        }),
+      );
+      detailResults.forEach((item) => {
+        if (item.detail) nextRiderDetails[item.rideId] = item.detail;
+        if (item.photoUrl) nextPhotoUrls[item.rideId] = item.photoUrl;
+      });
+      const detailError = detailResults.find((item) => item.error)?.error;
+      if (detailError) setMessage(detailError);
+    }
+    setAssignedRiderDetails(nextRiderDetails);
+    setRiderPhotoUrls(nextPhotoUrls);
     setConfirmationCodes(nextCodes);
     if (riderResult.data) {
       setRiderLocations(riderResult.data as RiderLocation[]);
@@ -542,6 +578,8 @@ export default function UserDashboard() {
     [assignedRiderLocation],
   );
   const assignedRiderProfile = activeRide?.assigned_rider_id ? riderProfiles[activeRide.assigned_rider_id] ?? null : null;
+  const assignedRiderDetail = activeRide ? assignedRiderDetails[activeRide.id] ?? null : null;
+  const assignedRiderPhotoUrl = activeRide ? riderPhotoUrls[activeRide.id] ?? null : null;
   const routeFrom = useMemo(() => {
     if (activeRide?.assigned_rider_id && assignedRiderLocation && ["assigned", "started"].includes(activeRide.status)) {
       return { lat: assignedRiderLocation.lat, lng: assignedRiderLocation.lng };
@@ -612,14 +650,22 @@ export default function UserDashboard() {
     }
 
     setSosBusy(alertType === "sos");
-    const { error } = await createSafetyAlert({
+    const { alert, error } = await createSafetyAlert({
       alertType,
       location: safetyLocation,
       message: alertMessage,
       rideId: activeRide.id,
     });
     setSosBusy(false);
-    setMessage(error ?? "Safety alert saved. Emergency contact notified in Taxiro if they have an account.");
+    if (error) {
+      setMessage(error);
+    } else if (alert?.delivery_status === "in_app") {
+      setMessage("SOS delivered to your linked emergency contact in Taxiro.");
+    } else if (alert?.delivery_status === "no_contact") {
+      setMessage("SOS saved, but no emergency contact is configured. Add one in Profile.");
+    } else {
+      setMessage("SOS saved, but this emergency phone is not linked to a Taxiro account. Use Call or SMS now.");
+    }
   }, [activeRide, safetyLocation]);
 
   usePanicTrigger({
@@ -702,13 +748,17 @@ export default function UserDashboard() {
             {activeRide ? (
               <ActiveUserRide
                 code={confirmationCodes[activeRide.id]}
+                emergencyContactName={profile?.emergency_contact_name ?? null}
+                emergencyContactPhone={profile?.emergency_contact_phone ?? null}
                 onCancel={() => setCancelTarget(activeRide)}
                 onReady={() => void markReady(activeRide)}
                 onReadySignalMinutesChange={setReadySignalMinutes}
                 readyBusy={readyRideId === activeRide.id}
                 onSos={() => void triggerSafetyAlert("sos", "SOS button pressed by the user during a Taxiro ride.")}
                 readySignalMinutes={readySignalMinutes}
+                riderDetails={assignedRiderDetail}
                 riderLocation={assignedRiderLocation}
+                riderPhotoUrl={assignedRiderPhotoUrl}
                 riderProfile={assignedRiderProfile}
                 routeSummary={routeSummary}
                 ride={activeRide}
@@ -1285,13 +1335,17 @@ function formatReadySignalTimeLeft(value: string | null) {
 
 function ActiveUserRide({
   code,
+  emergencyContactName,
+  emergencyContactPhone,
   onCancel,
   onReady,
   onReadySignalMinutesChange,
   onSos,
   readySignalMinutes,
   readyBusy,
+  riderDetails,
   riderLocation,
+  riderPhotoUrl,
   riderProfile,
   routeSummary,
   ride,
@@ -1299,13 +1353,17 @@ function ActiveUserRide({
   userId,
 }: {
   code?: string;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
   onCancel: () => void;
   onReady: () => void;
   onReadySignalMinutesChange: (minutes: 15 | 30 | 60) => void;
   onSos: () => void;
   readySignalMinutes: 15 | 30 | 60;
   readyBusy: boolean;
+  riderDetails?: AssignedRiderDetails | null;
   riderLocation?: RiderLocation | null;
+  riderPhotoUrl?: string | null;
   riderProfile?: RiderProfile | null;
   routeSummary: { distanceKm: number | null; durationMin: number | null } | null;
   ride: RideRequest;
@@ -1347,7 +1405,44 @@ function ActiveUserRide({
           ) : null}
         </div>
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-secondary/60 p-3">
+      {hasLivePhase ? (
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          {riderDetails ? (
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
+              <div className="relative size-[4.5rem] overflow-hidden rounded-lg bg-secondary">
+                {riderPhotoUrl ? (
+                  <Image alt={(riderDetails.full_name ?? "Assigned rider") + " profile"} className="object-cover" fill sizes="72px" src={riderPhotoUrl} unoptimized />
+                ) : (
+                  <div className="flex size-full items-center justify-center text-2xl font-black">
+                    {(riderDetails.full_name ?? "R").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-black">{riderDetails.full_name ?? "Taxiro rider"}</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-xs font-bold text-muted-foreground">
+                      <Star className="size-3.5 fill-current text-amber-500" />
+                      {Number(riderDetails.rating ?? 5).toFixed(1)} · {riderDetails.completed_rides ?? 0} rides
+                    </p>
+                  </div>
+                  <Badge className="shrink-0 bg-secondary text-secondary-foreground">{getVehicleLabel(riderDetails.vehicle_type)}</Badge>
+                </div>
+                <p className="mt-2 truncate text-sm font-semibold">{riderDetails.vehicle_make} {riderDetails.vehicle_model}</p>
+                <p className="mt-1 inline-flex rounded-md bg-[#101713] px-2.5 py-1 text-sm font-black tracking-[0.12em] text-white">{riderDetails.registration_number}</p>
+              </div>
+              {riderDetails.phone ? (
+                <a className="col-span-2 flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-muted text-sm font-black" href={"tel:" + riderDetails.phone}>
+                  <Phone className="size-4" /> Call rider
+                </a>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading your assigned rider and vehicle details...</p>
+          )}
+        </div>
+      ) : null}      <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-secondary/60 p-3">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Passenger</p>
           <p className="truncate font-black">{ride.passenger_name || (ride.booking_for === "other" ? "Guest passenger" : "You")}</p>
@@ -1533,6 +1628,16 @@ function ActiveUserRide({
           <Button className="mt-3 h-12 w-full rounded-lg" disabled={sosBusy} onClick={onSos} variant="destructive">
             {sosBusy ? "Sending SOS..." : "SOS - notify emergency contact"}
           </Button>
+          {emergencyContactPhone ? (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <a className="flex h-10 items-center justify-center gap-1 rounded-lg border border-red-200 bg-white text-xs font-black text-red-800" href={"tel:" + emergencyContactPhone}>
+                <Phone className="size-3.5" /> Call {emergencyContactName || "contact"}
+              </a>
+              <a className="flex h-10 items-center justify-center rounded-lg border border-red-200 bg-white px-2 text-center text-xs font-black text-red-800" href={"sms:" + emergencyContactPhone + "?body=" + encodeURIComponent("Taxiro SOS: I may need help. Please open Taxiro to view my ride alert.")}>
+                Prepare SOS SMS
+              </a>
+            </div>
+          ) : null}
           <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
             Triple volume-up is best-effort only in browsers. Keep the visible SOS button as the reliable safety action.
           </p>

@@ -119,6 +119,18 @@ export type RiderProfile = {
 };
 
 
+export type AssignedRiderDetails = {
+  rider_id: string;
+  full_name: string | null;
+  phone: string | null;
+  vehicle_type: VehicleType;
+  vehicle_make: string;
+  vehicle_model: string;
+  registration_number: string;
+  rating: number;
+  completed_rides: number;
+  photo_path: string | null;
+};
 export type RiderVehicle = {
   id: string;
   rider_id: string;
@@ -156,6 +168,8 @@ export type SafetyAlert = {
   ride_id: string;
   triggered_by: string;
   recipient_profile_id: string | null;
+  recipient_phone: string | null;
+  delivery_status: "no_contact" | "unlinked" | "in_app";
   alert_type: SafetyAlertType;
   message: string;
   lat: number | null;

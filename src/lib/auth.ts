@@ -3,6 +3,10 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Profile, UserRole, VehicleType } from "@/types/database";
 
 export async function getCurrentUser(supabase: SupabaseClient) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user) {
+    return sessionData.session.user;
+  }
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return null;

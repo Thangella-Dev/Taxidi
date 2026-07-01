@@ -53,7 +53,11 @@ export function RiderVehicleSwitcher({
           );
         })}
       </div>
-      {disabled ? <p className="mt-2 text-xs font-semibold text-amber-700">Finish the active ride before switching vehicles.</p> : null}
+      {!activeType && vehicles.some((vehicle) => vehicle.verification_status === "verified") ? (
+        <p className="mt-2 rounded-md bg-amber-50 p-2 text-xs font-semibold text-amber-800">
+          Select a verified vehicle to receive matching ride signals.
+        </p>
+      ) : null}      {disabled ? <p className="mt-2 text-xs font-semibold text-amber-700">Finish the active ride before switching vehicles.</p> : null}
       {!vehicles.some((vehicle) => vehicle.verification_status === "verified") ? (
         <p className="mt-2 text-xs font-semibold text-amber-700">Add a vehicle in the menu and wait for admin verification before going online.</p>
       ) : null}

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { establishSingleDeviceSession } from "@/lib/account-session";
 import { ensureInitialRiderVehicle, ensureProfile, uploadRiderLivePhoto } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { normalizeEmail, normalizePhone, normalizeRegistration, validateDrivingLicence, validateEmail, validateFullName, validatePassword, validatePhone, validateVehicleInput } from "@/lib/validation";
@@ -32,6 +33,7 @@ export default function AuthPage() {
   const [livePhoto, setLivePhoto] = useState<Blob | null>(null);
   const [message, setMessage] = useState("Create a real Taxiro account stored in Supabase.");
   const [loading, setLoading] = useState(false);
+
 
   function validateForm() {
     const emailError = validateEmail(email);
@@ -125,6 +127,7 @@ export default function AuthPage() {
           if (profile.role === "rider" && livePhoto) {
             await uploadRiderLivePhoto(supabase, data.user.id, livePhoto);
           }
+          await establishSingleDeviceSession(supabase, data.user.id);
           router.push(dashboardForRole(profile.role));
         }
       } else {
@@ -138,6 +141,7 @@ export default function AuthPage() {
         }
         const profile = await ensureProfile(supabase, data.user, role);
         await ensureInitialRiderVehicle(supabase, data.user);
+        await establishSingleDeviceSession(supabase, data.user.id);
         router.push(dashboardForRole(profile.role));
       }
       router.refresh();

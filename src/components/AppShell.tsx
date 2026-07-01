@@ -13,7 +13,9 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { LiveNotificationBanner } from "@/components/LiveNotificationBanner";
 import { Button } from "@/components/ui/button";
+import { useSingleDeviceSession } from "@/lib/account-session";
 import { getCurrentUser, getProfile } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { getSupabase } from "@/lib/supabase";
@@ -49,7 +51,10 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
+
+  useSingleDeviceSession();
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -61,6 +66,7 @@ export function AppShell({
     async function loadAccount() {
       const user = await getCurrentUser(client);
       setEmail(user?.email ?? null);
+      setProfileId(user?.id ?? null);
       if (user) {
         const profile = await getProfile(client, user.id);
         setRole(profile?.role ?? null);
@@ -91,6 +97,7 @@ export function AppShell({
   if (immersive) {
     return (
       <main className="min-h-svh min-w-0 w-full max-w-full overflow-x-clip bg-[#e9eee9] text-foreground">
+        <LiveNotificationBanner profileId={profileId} />
         {children}
       </main>
     );
@@ -98,6 +105,7 @@ export function AppShell({
 
   return (
     <main className="min-h-screen min-w-0 w-full max-w-full overflow-x-clip bg-background pb-24 md:pb-0">
+      <LiveNotificationBanner profileId={profileId} />
       <header className="sticky top-0 z-40 border-b border-border/80 bg-card/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-3 px-3 sm:px-5 lg:px-8">
           <Link href={role ? roleNavigation[role][0].href : "/"} className="flex min-w-0 items-center gap-2.5 font-black">

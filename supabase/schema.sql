@@ -2174,3 +2174,438 @@ end $$;
 
 comment on column public.rider_profiles.live_selfie_path is 'Private rider live identity capture reviewed by admins.';
 notify pgrst, 'reload schema';
+
+-- One active browser/device per Taxiro account.
+-- A new authenticated login replaces the previous device claim.
+
+create table if not exists public.account_sessions (
+  profile_id uuid primary key references public.profiles(id) on delete cascade,
+  device_id text not null check (char_length(device_id) between 20 and 200),
+  claimed_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now()
+);
+
+alter table public.account_sessions enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'account_sessions'
+      and policyname = 'account owners read active device'
+  ) then
+    create policy "account owners read active device"
+      on public.account_sessions for select to authenticated
+      using (profile_id = auth.uid() or public.is_admin());
+  end if;
+end $$;
+
+create or replace function public.claim_account_session(p_device_id text)
+returns public.account_sessions
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  claimed public.account_sessions;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+  if p_device_id is null or char_length(trim(p_device_id)) not between 20 and 200 then
+    raise exception 'Invalid device identifier';
+  end if;
+
+  insert into public.account_sessions (profile_id, device_id, claimed_at, last_seen_at)
+  values (auth.uid(), trim(p_device_id), now(), now())
+  on conflict (profile_id) do update
+  set device_id = excluded.device_id,
+      claimed_at = now(),
+      last_seen_at = now()
+  returning * into claimed;
+
+  return claimed;
+end $$;
+
+create or replace function public.touch_account_session(p_device_id text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.account_sessions
+  set last_seen_at = now()
+  where profile_id = auth.uid() and device_id = trim(p_device_id);
+  return found;
+end $$;
+
+grant select on public.account_sessions to authenticated;
+grant execute on function public.claim_account_session(text) to authenticated;
+grant execute on function public.touch_account_session(text) to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public'
+      and tablename = 'account_sessions'
+  ) then
+    alter publication supabase_realtime add table public.account_sessions;
+  end if;
+end $$;
+
+notify pgrst, 'reload schema';
+
+-- Repair vehicle-specific ready and scheduled signal delivery.
+
+create or replace function public.activate_first_verified_vehicle()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.verification_status = 'verified' then
+    update public.rider_profiles profile
+    set active_vehicle_type = new.vehicle_type,
+        updated_at = now()
+    where profile.rider_id = new.rider_id
+      and profile.verification_status = 'verified'
+      and profile.active_vehicle_type is null;
+  end if;
+  return new;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgname = 'activate_first_verified_vehicle'
+      and tgrelid = 'public.rider_vehicles'::regclass
+  ) then
+    create trigger activate_first_verified_vehicle
+      after insert or update of verification_status on public.rider_vehicles
+      for each row execute function public.activate_first_verified_vehicle();
+  end if;
+end $$;
+
+create or replace function public.activate_vehicle_after_identity_approval()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  first_verified text;
+begin
+  if new.verification_status = 'verified' and new.active_vehicle_type is null then
+    select vehicle_type into first_verified
+    from public.rider_vehicles
+    where rider_id = new.rider_id and verification_status = 'verified'
+    order by case vehicle_type when 'bike' then 1 when 'auto' then 2 else 3 end
+    limit 1;
+
+    if first_verified is not null then
+      update public.rider_profiles
+      set active_vehicle_type = first_verified, updated_at = now()
+      where rider_id = new.rider_id and active_vehicle_type is null;
+    end if;
+  end if;
+  return new;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgname = 'activate_vehicle_after_identity_approval'
+      and tgrelid = 'public.rider_profiles'::regclass
+  ) then
+    create trigger activate_vehicle_after_identity_approval
+      after update of verification_status on public.rider_profiles
+      for each row execute function public.activate_vehicle_after_identity_approval();
+  end if;
+end $$;
+
+update public.rider_profiles profile
+set active_vehicle_type = (
+      select vehicle.vehicle_type
+      from public.rider_vehicles vehicle
+      where vehicle.rider_id = profile.rider_id
+        and vehicle.verification_status = 'verified'
+      order by case vehicle.vehicle_type when 'bike' then 1 when 'auto' then 2 else 3 end
+      limit 1
+    ),
+    updated_at = now()
+where profile.active_vehicle_type is null
+  and profile.verification_status = 'verified'
+  and exists (
+    select 1 from public.rider_vehicles vehicle
+    where vehicle.rider_id = profile.rider_id
+      and vehicle.verification_status = 'verified'
+  );
+
+alter policy "users view own rides riders view assigned or ready admins all"
+on public.ride_requests
+using (
+  user_id = auth.uid()
+  or assigned_rider_id = auth.uid()
+  or public.is_admin()
+  or (
+    status in ('scheduled', 'ready')
+    and public.is_rider()
+    and exists (
+      select 1
+      from public.rider_profiles profile
+      join public.rider_vehicles vehicle
+        on vehicle.rider_id = profile.rider_id
+       and vehicle.vehicle_type = profile.active_vehicle_type
+       and vehicle.verification_status = 'verified'
+      where profile.rider_id = auth.uid()
+        and profile.verification_status = 'verified'
+        and profile.active_vehicle_type = ride_requests.vehicle_type
+    )
+  )
+);
+
+notify pgrst, 'reload schema';
+
+-- Keep vehicle-specific signal visibility without recursive RLS policy checks.
+
+create or replace function public.can_view_vehicle_signal(p_vehicle_type text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles account
+    join public.rider_profiles profile on profile.rider_id = account.id
+    join public.rider_vehicles vehicle
+      on vehicle.rider_id = profile.rider_id
+     and vehicle.vehicle_type = profile.active_vehicle_type
+     and vehicle.verification_status = 'verified'
+    where account.id = auth.uid()
+      and account.role = 'rider'
+      and profile.verification_status = 'verified'
+      and profile.active_vehicle_type = p_vehicle_type
+  );
+$$;
+
+revoke all on function public.can_view_vehicle_signal(text) from public;
+grant execute on function public.can_view_vehicle_signal(text) to authenticated;
+
+alter policy "users view own rides riders view assigned or ready admins all"
+on public.ride_requests
+using (
+  user_id = auth.uid()
+  or assigned_rider_id = auth.uid()
+  or public.is_admin()
+  or (
+    status in ('scheduled', 'ready')
+    and public.can_view_vehicle_signal(vehicle_type)
+  )
+);
+
+notify pgrst, 'reload schema';
+
+-- Secure assigned-rider identity display and explicit SOS delivery outcomes.
+
+alter table public.safety_alerts
+  add column if not exists recipient_phone text,
+  add column if not exists delivery_status text not null default 'unlinked';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'safety_alerts_delivery_status_check'
+      and conrelid = 'public.safety_alerts'::regclass
+  ) then
+    alter table public.safety_alerts
+      add constraint safety_alerts_delivery_status_check
+      check (delivery_status in ('no_contact', 'unlinked', 'in_app'));
+  end if;
+end $$;
+
+create or replace function public.can_view_assigned_rider_photo(p_rider_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.ride_requests ride
+    where ride.user_id = auth.uid()
+      and ride.assigned_rider_id::text = p_rider_id
+      and ride.status in ('assigned', 'started')
+  );
+$$;
+
+revoke all on function public.can_view_assigned_rider_photo(text) from public;
+grant execute on function public.can_view_assigned_rider_photo(text) to authenticated;
+
+alter policy "riders and admins read verification images"
+on storage.objects
+using (
+  bucket_id = 'rider-verification'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or public.is_admin()
+    or public.can_view_assigned_rider_photo((storage.foldername(name))[1])
+  )
+);
+
+create or replace function public.get_assigned_rider_details(p_ride_id uuid)
+returns table (
+  rider_id uuid,
+  full_name text,
+  phone text,
+  vehicle_type text,
+  vehicle_make text,
+  vehicle_model text,
+  registration_number text,
+  rating numeric,
+  completed_rides integer,
+  photo_path text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    ride.assigned_rider_id,
+    account.full_name,
+    account.phone,
+    ride.vehicle_type,
+    vehicle.make,
+    vehicle.model,
+    vehicle.registration_number,
+    profile.rating,
+    profile.completed_rides,
+    profile.live_selfie_path
+  from public.ride_requests ride
+  join public.profiles account on account.id = ride.assigned_rider_id
+  join public.rider_profiles profile on profile.rider_id = ride.assigned_rider_id
+  join public.rider_vehicles vehicle
+    on vehicle.rider_id = ride.assigned_rider_id
+   and vehicle.vehicle_type = ride.vehicle_type
+   and vehicle.verification_status = 'verified'
+  where ride.id = p_ride_id
+    and ride.assigned_rider_id is not null
+    and (
+      ride.user_id = auth.uid()
+      or ride.assigned_rider_id = auth.uid()
+      or public.is_admin()
+    );
+$$;
+
+revoke all on function public.get_assigned_rider_details(uuid) from public;
+grant execute on function public.get_assigned_rider_details(uuid) to authenticated;
+
+create or replace function public.create_safety_alert(
+  p_ride_id uuid,
+  p_alert_type text,
+  p_message text,
+  p_lat double precision default null,
+  p_lng double precision default null,
+  p_accuracy_m numeric default null
+)
+returns public.safety_alerts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ride public.ride_requests;
+  v_profile public.profiles;
+  v_recipient uuid;
+  v_alert public.safety_alerts;
+  v_message text := nullif(trim(coalesce(p_message, '')), '');
+  v_phone text;
+  v_delivery text;
+begin
+  if p_alert_type not in ('sos', 'late_trip', 'route_changed') then
+    raise exception 'Unsupported safety alert type';
+  end if;
+
+  select * into v_ride from public.ride_requests where id = p_ride_id for update;
+  if v_ride.id is null then raise exception 'Ride not found'; end if;
+  if v_ride.user_id <> auth.uid() then raise exception 'Only the booking user can trigger a safety alert'; end if;
+  if v_ride.status not in ('assigned', 'started') then raise exception 'Safety alerts are available after rider assignment'; end if;
+
+  select * into v_profile from public.profiles where id = auth.uid();
+  v_phone := public.normalize_phone(v_profile.emergency_contact_phone);
+
+  select contact.id into v_recipient
+  from public.profiles contact
+  where public.normalize_phone(contact.phone) = v_phone and contact.id <> auth.uid()
+  order by contact.created_at desc limit 1;
+
+  v_delivery := case
+    when v_phone is null or v_phone = '' then 'no_contact'
+    when v_recipient is null then 'unlinked'
+    else 'in_app'
+  end;
+
+  select * into v_alert
+  from public.safety_alerts alert
+  where alert.ride_id = p_ride_id and alert.alert_type = p_alert_type
+    and alert.created_at > now() - interval '30 minutes'
+  order by alert.created_at desc limit 1;
+
+  if v_alert.id is null then
+    insert into public.safety_alerts (
+      ride_id, triggered_by, recipient_profile_id, recipient_phone,
+      delivery_status, alert_type, message, lat, lng, accuracy_m
+    ) values (
+      p_ride_id, auth.uid(), v_recipient, nullif(v_phone, ''), v_delivery,
+      p_alert_type, coalesce(v_message, 'Taxiro safety alert triggered during ride'),
+      p_lat, p_lng, p_accuracy_m
+    ) returning * into v_alert;
+  else
+    update public.safety_alerts
+    set recipient_profile_id = coalesce(v_alert.recipient_profile_id, v_recipient),
+        recipient_phone = nullif(v_phone, ''),
+        delivery_status = case
+          when coalesce(v_alert.recipient_profile_id, v_recipient) is not null then 'in_app'
+          else v_delivery
+        end
+    where id = v_alert.id
+    returning * into v_alert;
+  end if;
+
+  if v_alert.recipient_profile_id is not null and not exists (
+    select 1 from public.app_notifications note where note.safety_alert_id = v_alert.id
+  ) then
+    insert into public.app_notifications (profile_id, title, body, related_ride_id, safety_alert_id)
+    values (
+      v_alert.recipient_profile_id,
+      case when p_alert_type = 'sos' then 'Taxiro SOS alert'
+           when p_alert_type = 'late_trip' then 'Taxiro trip delay alert'
+           else 'Taxiro route change alert' end,
+      coalesce(v_profile.full_name, 'Your emergency contact') || ' may need help during a Taxiro ride. ' || coalesce(v_message, ''),
+      p_ride_id,
+      v_alert.id
+    );
+  end if;
+
+  if not exists (
+    select 1 from public.ride_status_events event
+    where event.ride_id = p_ride_id and event.note = 'Safety alert created: ' || p_alert_type
+      and event.created_at > now() - interval '30 minutes'
+  ) then
+    insert into public.ride_status_events (ride_id, status, actor_id, note)
+    values (p_ride_id, v_ride.status, auth.uid(), 'Safety alert created: ' || p_alert_type);
+  end if;
+
+  return v_alert;
+end $$;
+
+grant execute on function public.create_safety_alert(uuid, text, text, double precision, double precision, numeric) to authenticated;
+notify pgrst, 'reload schema';
