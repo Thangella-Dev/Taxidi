@@ -2,11 +2,12 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 
 import { getSupabase } from "@/lib/supabase";
 
-const DEVICE_KEY = "taxiro-active-device-v1";
+const DEVICE_KEY = "taxiro-active-device-v2";
+const LEGACY_DEVICE_KEY = "taxiro-active-device-v1";
 let memoryDeviceId: string | null = null;
 
 type AccountSession = {
@@ -16,7 +17,7 @@ type AccountSession = {
   last_seen_at: string;
 };
 
-export function getOrCreateDeviceId() {
+function getStoredDeviceId() {
   if (memoryDeviceId) return memoryDeviceId;
   try {
     const current = window.localStorage.getItem(DEVICE_KEY);
@@ -25,17 +26,43 @@ export function getOrCreateDeviceId() {
     window.localStorage.setItem(DEVICE_KEY, created);
     return (memoryDeviceId = created);
   } catch {
-    const created = "taxiro-" + crypto.randomUUID();
-    memoryDeviceId = created;
-    return created;
+    return (memoryDeviceId = "taxiro-" + crypto.randomUUID());
   }
+}
+
+function readSessionId(session: Session | null) {
+  if (!session?.access_token) return null;
+  try {
+    const payload = session.access_token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="))) as {
+      session_id?: string;
+    };
+    return decoded.session_id?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function getLegacyDeviceId() {
+  try {
+    return window.localStorage.getItem(LEGACY_DEVICE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function getAuthenticatedDeviceId(supabase: SupabaseClient) {
+  const { data } = await supabase.auth.getSession();
+  return readSessionId(data.session) ?? getStoredDeviceId();
 }
 
 export async function establishSingleDeviceSession(
   supabase: SupabaseClient,
   userId: string,
 ) {
-  const deviceId = getOrCreateDeviceId();
+  const deviceId = await getAuthenticatedDeviceId(supabase);
   await supabase.auth.signOut({ scope: "others" });
   const { error } = await supabase.rpc("claim_account_session", {
     p_device_id: deviceId,
@@ -63,7 +90,16 @@ async function validateDeviceClaim(
     });
     return !claimError;
   }
-  if (claim.device_id !== deviceId) return false;
+  if (claim.device_id !== deviceId) {
+    const legacyDeviceId = getLegacyDeviceId();
+    if (legacyDeviceId && claim.device_id === legacyDeviceId) {
+      const { error: upgradeError } = await supabase.rpc("claim_account_session", {
+        p_device_id: deviceId,
+      });
+      return !upgradeError;
+    }
+    return false;
+  }
   await supabase.rpc("touch_account_session", { p_device_id: deviceId });
   return true;
 }
@@ -79,7 +115,7 @@ export function useSingleDeviceSession(enabled = true) {
 
     let active = true;
     let channel: ReturnType<typeof client.channel> | null = null;
-    const deviceId = getOrCreateDeviceId();
+    let deviceId: string | null = null;
 
     async function endReplacedSession() {
       if (!active) return;
@@ -89,10 +125,22 @@ export function useSingleDeviceSession(enabled = true) {
       router.refresh();
     }
 
+    async function validateCurrentSession() {
+      const { data } = await client.auth.getSession();
+      const userId = data.session?.user.id;
+      if (!userId || !active) return true;
+      deviceId = readSessionId(data.session) ?? deviceId ?? getStoredDeviceId();
+      const valid = await validateDeviceClaim(client, userId, deviceId);
+      if (!valid) await endReplacedSession();
+      return valid;
+    }
+
     async function initialize() {
       const { data } = await client.auth.getSession();
       const userId = data.session?.user.id;
       if (!userId || !active) return;
+
+      deviceId = readSessionId(data.session) ?? getStoredDeviceId();
       if (!(await validateDeviceClaim(client, userId, deviceId))) {
         await endReplacedSession();
         return;
@@ -110,7 +158,7 @@ export function useSingleDeviceSession(enabled = true) {
           },
           (payload) => {
             const incoming = payload.new as Partial<AccountSession>;
-            if (incoming.device_id && incoming.device_id !== deviceId) {
+            if (deviceId && incoming.device_id && incoming.device_id !== deviceId) {
               void endReplacedSession();
             }
           },
@@ -120,21 +168,17 @@ export function useSingleDeviceSession(enabled = true) {
 
     void initialize();
     const validateOnResume = () => {
-      if (document.visibilityState !== "visible") return;
-      void client.auth.getSession().then(async ({ data }) => {
-        const userId = data.session?.user.id;
-        if (userId && !(await validateDeviceClaim(client, userId, deviceId))) {
-          await endReplacedSession();
-        }
-      });
+      if (document.visibilityState === "visible") void validateCurrentSession();
     };
-    const interval = window.setInterval(validateOnResume, 30_000);
+    const interval = window.setInterval(() => void validateCurrentSession(), 30_000);
     document.addEventListener("visibilitychange", validateOnResume);
+    window.addEventListener("online", validateOnResume);
 
     return () => {
       active = false;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", validateOnResume);
+      window.removeEventListener("online", validateOnResume);
       if (channel) void client.removeChannel(channel);
     };
   }, [enabled, router]);

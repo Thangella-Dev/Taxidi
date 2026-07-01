@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import {
   cloneElement,
   isValidElement,
@@ -34,10 +34,10 @@ export function Button({
   ...props
 }: ButtonProps) {
   const classes = cn(
-    "inline-flex max-w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+    "taxiro-button inline-flex max-w-full items-center justify-center gap-2 rounded-lg text-sm font-bold transition-[transform,box-shadow,background-color,border-color,color] duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97]",
     size === "lg" ? "h-12 px-5" : size === "sm" ? "h-9 px-3" : "h-11 px-4",
     variant === "default" &&
-      "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md",
+      "bg-primary text-primary-foreground shadow-[0_8px_20px_rgb(16_23_19_/_0.16)] hover:bg-primary/92 hover:shadow-[0_12px_28px_rgb(16_23_19_/_0.22)]",
     variant === "outline" &&
       "border border-border bg-card hover:border-primary/25 hover:bg-muted",
     variant === "ghost" && "hover:bg-secondary",
@@ -86,4 +86,3 @@ function isLinkElement(children: ReactNode): children is ReactElement<LinkChildP
     (children as ReactElement).type === Link
   );
 }
-

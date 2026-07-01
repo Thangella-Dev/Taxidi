@@ -17,8 +17,8 @@ export function Tabs({
         {tabs.map((tab, index) => (
           <button
             className={cn(
-              "rounded-md px-3 py-2 text-sm font-medium",
-              active === index ? "bg-card shadow-sm" : "text-muted-foreground",
+              "rounded-md px-3 py-2 text-sm font-bold transition-[transform,background-color,color,box-shadow] duration-300 active:scale-[0.97]",
+              active === index ? "bg-card shadow-[0_5px_16px_rgb(16_23_19_/_0.09)]" : "text-muted-foreground hover:text-foreground",
             )}
             key={tab.label}
             onClick={() => setActive(index)}
@@ -28,7 +28,7 @@ export function Tabs({
           </button>
         ))}
       </div>
-      {tabs[active]?.content}
+      <div className="taxiro-tab-panel" key={active}>{tabs[active]?.content}</div>
     </div>
   );
 }

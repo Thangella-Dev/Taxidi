@@ -15,7 +15,6 @@ import {
 
 import { LiveNotificationBanner } from "@/components/LiveNotificationBanner";
 import { Button } from "@/components/ui/button";
-import { useSingleDeviceSession } from "@/lib/account-session";
 import { getCurrentUser, getProfile } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { getSupabase } from "@/lib/supabase";
@@ -53,8 +52,6 @@ export function AppShell({
   const [email, setEmail] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
-
-  useSingleDeviceSession();
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -133,10 +130,10 @@ export function AppShell({
   return (
     <main className="min-h-screen min-w-0 w-full max-w-full overflow-x-clip bg-background pb-24 md:pb-0">
       <LiveNotificationBanner profileId={profileId} />
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-card/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header className="taxiro-app-header sticky top-0 z-40 border-b border-border/70 bg-card/88 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-3 px-3 sm:px-5 lg:px-8">
           <Link href={role ? roleNavigation[role][0].href : "/"} className="flex min-w-0 items-center gap-2.5 font-black">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <span className="taxiro-brand-mark flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <Bike className="size-5" />
             </span>
             <span className="truncate text-lg tracking-tight">Taxiro</span>
@@ -150,7 +147,7 @@ export function AppShell({
             {navigation.map(({ href, label }) => (
               <Link
                 className={cn(
-                  "rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-card hover:text-foreground",
+                  "rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-[transform,background-color,color,box-shadow] duration-300 hover:bg-card hover:text-foreground hover:shadow-sm active:scale-[0.97]",
                   pathname === href && "bg-card text-foreground shadow-sm",
                 )}
                 href={href}
@@ -180,7 +177,7 @@ export function AppShell({
         </div>
       </header>
 
-      <section className="mx-auto min-w-0 max-w-[90rem] px-3 py-5 sm:px-5 sm:py-8 lg:px-8 lg:py-10">
+      <section className="taxiro-page-enter mx-auto min-w-0 max-w-[90rem] px-3 py-5 sm:px-5 sm:py-8 lg:px-8 lg:py-10">
         <div className="mb-5 sm:mb-7">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Taxiro workspace</p>
           <h1 className="mt-1 min-w-0 text-2xl font-black tracking-tight sm:text-3xl">{title}</h1>
@@ -210,5 +207,3 @@ export function AppShell({
     </main>
   );
 }
-
-

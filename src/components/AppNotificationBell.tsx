@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Bell, CheckCheck, ShieldAlert, X } from "lucide-react";
+import { Bell, CheckCheck, ChevronRight, ShieldAlert, Trash2, X } from "lucide-react";
 
 import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ export function AppNotificationBell({
   profileId: string | null;
 }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationError, setNotificationError] = useState("");
   const [open, setOpen] = useState(false);
 
   const loadNotifications = useCallback(async () => {
@@ -26,8 +28,9 @@ export function AppNotificationBell({
       .from("app_notifications")
       .select("*")
       .eq("profile_id", profileId)
+      .is("read_at", null)
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(20);
     setNotifications((data as AppNotification[]) ?? []);
   }, [profileId]);
 
@@ -50,41 +53,55 @@ export function AppNotificationBell({
     };
   }, [loadNotifications, profileId]);
 
-  async function markRead(notificationId: string) {
-    const supabase = getSupabase();
-    if (supabase) {
-      await supabase
-        .from("app_notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("id", notificationId);
+  useEffect(() => {
+    if (!open) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
     }
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === notificationId
-          ? { ...notification, read_at: new Date().toISOString() }
-          : notification,
-      ),
-    );
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
+
+  async function dismissNotification(notificationId: string) {
+    setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+    setNotificationError("");
+    const supabase = getSupabase();
+    if (!supabase || !profileId) return;
+    const { error } = await supabase
+      .from("app_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", notificationId)
+      .eq("profile_id", profileId);
+    if (error) {
+      setNotificationError("Could not dismiss this notification. Please try again.");
+      await loadNotifications();
+    }
   }
 
   async function markAllRead() {
     if (!profileId) return;
+    setNotifications([]);
+    setNotificationError("");
     const supabase = getSupabase();
-    if (supabase) {
-      await supabase
-        .from("app_notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("profile_id", profileId)
-        .is("read_at", null);
+    if (!supabase) return;
+    const { error } = await supabase
+      .from("app_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("profile_id", profileId)
+      .is("read_at", null);
+    if (error) {
+      setNotificationError("Could not clear notifications. Please try again.");
+      await loadNotifications();
     }
-    await loadNotifications();
   }
 
-  const unreadCount = notifications.filter((notification) => !notification.read_at).length;
+  const unreadCount = notifications.length;
 
   return (
     <div className={cn("relative", className)}>
       <button
+        aria-expanded={open}
+        aria-haspopup="dialog"
         aria-label="Open notifications"
         className="relative flex size-10 items-center justify-center rounded-xl border border-border bg-card/95 shadow-[var(--shadow-soft)] backdrop-blur transition active:scale-95 sm:size-11"
         onClick={() => setOpen((value) => !value)}
@@ -98,26 +115,58 @@ export function AppNotificationBell({
         ) : null}
       </button>
 
-      {open ? (
-        <div className="absolute right-0 top-12 z-[1800] w-[min(22rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-border bg-white shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/60 p-3">
-            <div>
-              <p className="font-black">Notifications</p>
-              <p className="text-xs text-muted-foreground">Swipe left or tap X to clear</p>
-            </div>
-            <button aria-label="Mark all notifications read" className="flex size-9 items-center justify-center rounded-xl bg-card text-primary" onClick={() => void markAllRead()} type="button">
-              <CheckCheck className="size-4" />
-            </button>
-          </div>
-          <div className="grid max-h-[26rem] gap-2 overflow-y-auto p-2">
-            {notifications.length ? notifications.map((notification) => (
-              <SwipeNotificationCard key={notification.id} notification={notification} onDismiss={() => void markRead(notification.id)} />
-            )) : (
-              <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground">No notifications yet.</p>
-            )}
-          </div>
-        </div>
-      ) : null}
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[2400]">
+              <button
+                aria-label="Close notifications"
+                className="absolute inset-0 cursor-default bg-black/10 backdrop-blur-[1px]"
+                onClick={() => setOpen(false)}
+                type="button"
+              />
+              <section
+                aria-label="Notifications"
+                aria-modal="true"
+                className="taxiro-notification-panel fixed max-h-[calc(100dvh-5rem)] overflow-hidden rounded-2xl border border-border bg-white shadow-2xl"
+                role="dialog"
+              >
+                <header className="flex items-center justify-between gap-3 border-b border-border bg-muted/70 p-3 backdrop-blur">
+                  <div className="min-w-0">
+                    <p className="font-black">Notifications</p>
+                    <p className="truncate text-xs text-muted-foreground">Swipe left or tap dismiss</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {notifications.length ? (
+                      <button aria-label="Clear all notifications" className="flex size-9 items-center justify-center rounded-xl bg-card text-primary shadow-sm" onClick={() => void markAllRead()} type="button">
+                        <CheckCheck className="size-4" />
+                      </button>
+                    ) : null}
+                    <button aria-label="Close notifications" className="flex size-9 items-center justify-center rounded-xl bg-card text-primary shadow-sm" onClick={() => setOpen(false)} type="button">
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </header>
+                {notificationError ? <p className="mx-2 mt-2 rounded-xl bg-red-50 p-2 text-xs font-bold text-red-700" role="status">{notificationError}</p> : null}
+                <div className="grid max-h-[calc(100dvh-9.75rem)] gap-2 overflow-y-auto overscroll-contain p-2">
+                  {notifications.length ? notifications.map((notification) => (
+                    <SwipeNotificationCard
+                      key={notification.id}
+                      notification={notification}
+                      onDismiss={() => void dismissNotification(notification.id)}
+                    />
+                  )) : (
+                    <div className="grid place-items-center rounded-2xl bg-muted p-8 text-center">
+                      <Bell className="size-6 text-muted-foreground" />
+                      <p className="mt-3 font-black">You are all caught up</p>
+                      <p className="mt-1 text-sm text-muted-foreground">New ride and safety updates will appear here.</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -130,55 +179,111 @@ function SwipeNotificationCard({
   onDismiss: () => void;
 }) {
   const startXRef = useRef<number | null>(null);
+  const startYRef = useRef<number | null>(null);
+  const horizontalDragRef = useRef(false);
+  const offsetRef = useRef(0);
+  const [dismissing, setDismissing] = useState(false);
   const [offset, setOffset] = useState(0);
+
+  function updateOffset(value: number) {
+    offsetRef.current = value;
+    setOffset(value);
+  }
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     startXRef.current = event.clientX;
+    startYRef.current = event.clientY;
+    horizontalDragRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (startXRef.current === null) return;
-    const delta = event.clientX - startXRef.current;
-    setOffset(Math.min(0, Math.max(-96, delta)));
+    if (startXRef.current === null || startYRef.current === null) return;
+    const deltaX = event.clientX - startXRef.current;
+    const deltaY = event.clientY - startYRef.current;
+    if (!horizontalDragRef.current) {
+      if (Math.abs(deltaX) < 7 && Math.abs(deltaY) < 7) return;
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        startXRef.current = null;
+        startYRef.current = null;
+        updateOffset(0);
+        return;
+      }
+      horizontalDragRef.current = true;
+    }
+    event.preventDefault();
+    updateOffset(Math.min(0, Math.max(-132, deltaX)));
   }
 
-  function onPointerUp() {
-    if (offset < -64) onDismiss();
-    setOffset(0);
+  function finishPointer(event: React.PointerEvent<HTMLDivElement>) {
+    const shouldDismiss = horizontalDragRef.current && offsetRef.current < -54;
     startXRef.current = null;
+    startYRef.current = null;
+    horizontalDragRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (shouldDismiss) {
+      setDismissing(true);
+      updateOffset(-420);
+      window.setTimeout(onDismiss, 180);
+    } else {
+      updateOffset(0);
+    }
   }
 
-  const content = (
-    <div
-      className={cn(
-        "rounded-2xl border p-3 text-sm transition-transform touch-pan-y",
-        notification.read_at ? "border-border bg-card" : "border-red-200 bg-red-50",
-      )}
-      onPointerCancel={onPointerUp}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      style={{ transform: `translateX(${offset}px)` }}
-    >
-      <div className="flex items-start gap-2">
-        <ShieldAlert className={cn("mt-0.5 size-4 shrink-0", notification.category === "safety" ? "text-red-600" : "text-primary")} />
-        <div className="min-w-0 flex-1">
-          <p className="line-clamp-1 font-black">{notification.title}</p>
-          <p className="mt-1 line-clamp-3 text-muted-foreground">{notification.body}</p>
-          <p className="mt-2 text-[11px] font-bold text-muted-foreground">
-            {new Date(notification.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
-          </p>
-        </div>
-        <button aria-label="Dismiss notification" className="grid size-8 shrink-0 place-items-center rounded-xl bg-white" onClick={onDismiss} type="button">
-          <X className="size-4" />
-        </button>
-      </div>
-    </div>
-  );
+  function cancelPointer(event: React.PointerEvent<HTMLDivElement>) {
+    startXRef.current = null;
+    startYRef.current = null;
+    horizontalDragRef.current = false;
+    updateOffset(0);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
 
-  return notification.related_ride_id ? (
-    <Link href={`/rides/${notification.related_ride_id}`} onClick={() => void onDismiss()}>
-      {content}
-    </Link>
-  ) : content;
+  function dismissNow() {
+    setDismissing(true);
+    updateOffset(-420);
+    window.setTimeout(onDismiss, 180);
+  }
+
+  return (
+    <article className="relative overflow-hidden rounded-2xl bg-red-600">
+      <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center gap-1 text-xs font-black text-white">
+        <Trash2 className="size-4" />
+        Dismiss
+      </div>
+      <div
+        className={cn(
+          "relative rounded-2xl border border-red-200 bg-red-50 p-3 text-sm touch-pan-y",
+          dismissing ? "transition-transform duration-200 ease-in" : "transition-transform duration-150 ease-out",
+        )}
+        onPointerCancel={cancelPointer}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finishPointer}
+        style={{ transform: "translateX(" + offset + "px)" }}
+      >
+        <div className="flex items-start gap-2">
+          <ShieldAlert className={cn("mt-0.5 size-4 shrink-0", notification.category === "safety" ? "text-red-600" : "text-primary")} />
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-1 font-black">{notification.title}</p>
+            <p className="mt-1 line-clamp-3 text-muted-foreground">{notification.body}</p>
+            <p className="mt-2 text-[11px] font-bold text-muted-foreground">
+              {new Date(notification.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+            </p>
+            {notification.related_ride_id ? (
+              <Link className="mt-2 inline-flex items-center gap-1 font-black text-primary" href={"/rides/" + notification.related_ride_id}>
+                Open ride <ChevronRight className="size-3.5" />
+              </Link>
+            ) : null}
+          </div>
+          <button aria-label="Dismiss notification" className="grid size-8 shrink-0 place-items-center rounded-xl bg-white shadow-sm" onClick={dismissNow} type="button">
+            <X className="size-4" />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
 }

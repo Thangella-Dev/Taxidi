@@ -710,3 +710,247 @@ aside {
   height: 40px;
   width: 40px;
 }
+
+/* Premium interaction system */
+:root {
+  --motion-spring: cubic-bezier(0.2, 0.82, 0.2, 1);
+  --motion-snappy: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-premium: 0 1px 1px rgb(16 23 19 / 4%), 0 12px 34px rgb(16 23 19 / 9%);
+  --shadow-premium-hover: 0 2px 2px rgb(16 23 19 / 5%), 0 20px 48px rgb(16 23 19 / 14%);
+}
+
+body {
+  background-color: #f5f7f4;
+}
+
+.taxiro-page-enter {
+  animation: taxiro-page-arrive 520ms var(--motion-snappy) both;
+}
+
+.taxiro-app-header {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 80%), 0 8px 30px rgb(16 23 19 / 4%);
+}
+
+.taxiro-brand-mark {
+  position: relative;
+  transition: transform 360ms var(--motion-spring), box-shadow 360ms ease;
+}
+
+.taxiro-brand-mark::after {
+  border: 1px solid rgb(219 248 111 / 65%);
+  border-radius: inherit;
+  content: "";
+  inset: 4px;
+  pointer-events: none;
+  position: absolute;
+}
+
+a:hover .taxiro-brand-mark {
+  box-shadow: 0 10px 26px rgb(16 23 19 / 20%);
+  transform: rotate(-3deg) scale(1.04);
+}
+
+.taxiro-button {
+  overflow: hidden;
+  position: relative;
+  transform: translateZ(0);
+}
+
+.taxiro-button::after {
+  background: rgb(255 255 255 / 18%);
+  content: "";
+  height: 180%;
+  left: -32%;
+  pointer-events: none;
+  position: absolute;
+  top: -40%;
+  transform: rotate(18deg) translateX(-160%);
+  transition: transform 620ms var(--motion-snappy);
+  width: 22%;
+}
+
+.taxiro-button:hover::after {
+  transform: rotate(18deg) translateX(720%);
+}
+
+.taxiro-card {
+  transition: border-color 320ms ease, box-shadow 320ms ease, transform 320ms var(--motion-spring);
+}
+
+.taxiro-input {
+  box-shadow: inset 0 1px 2px rgb(16 23 19 / 3%);
+}
+
+.taxiro-input:focus {
+  box-shadow: 0 0 0 4px rgb(219 248 111 / 24%), 0 10px 26px rgb(16 23 19 / 7%);
+}
+
+.taxiro-tab-panel {
+  animation: taxiro-content-reveal 360ms var(--motion-snappy) both;
+}
+
+.taxiro-sheet-surface {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 90%) inset, 0 28px 72px rgb(16 23 19 / 20%);
+  transition: box-shadow 360ms ease, border-color 360ms ease;
+}
+
+.taxiro-responsive-sheet {
+  transition-duration: 460ms;
+  transition-timing-function: var(--motion-spring);
+}
+
+.taxiro-sheet-grabber {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 90%) inset;
+  transition: background-color 240ms ease, transform 240ms var(--motion-spring), width 240ms var(--motion-spring);
+}
+
+.taxiro-sheet-drag-handle:hover .taxiro-sheet-grabber,
+.taxiro-sheet-drag-handle:active .taxiro-sheet-grabber {
+  background: #aeb8af;
+  transform: scaleY(1.2);
+  width: 3rem;
+}
+
+.taxiro-sheet-side-toggle {
+  transition: transform 280ms var(--motion-spring), box-shadow 280ms ease, background-color 280ms ease;
+}
+
+.taxiro-sheet-side-toggle:hover {
+  background: #18221c;
+  box-shadow: 0 18px 42px rgb(16 23 19 / 26%);
+}
+
+.taxiro-sheet-side-left .taxiro-sheet-side-toggle:hover {
+  transform: translateY(-50%) translateX(3px);
+}
+
+.taxiro-sheet-side-right .taxiro-sheet-side-toggle:hover {
+  transform: translateY(-50%) translateX(-3px);
+}
+
+.taxiro-overlay-bar > * {
+  animation: taxiro-overlay-arrive 520ms var(--motion-snappy) both;
+}
+
+.taxiro-overlay-bar > *:nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.leaflet-tile-pane {
+  transition: filter 600ms ease;
+}
+
+.leaflet-popup-content-wrapper {
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 1rem;
+  box-shadow: 0 18px 48px rgb(16 23 19 / 18%);
+}
+
+.leaflet-popup-tip {
+  box-shadow: 3px 3px 8px rgb(16 23 19 / 8%);
+}
+
+.taxiro-rider-marker-assigned {
+  animation: taxiro-assigned-rider 2.2s ease-in-out infinite;
+}
+
+[role="status"] {
+  animation: taxiro-status-arrive 360ms var(--motion-snappy) both;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .taxiro-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 18%, var(--border));
+    box-shadow: var(--shadow-premium-hover);
+    transform: translateY(-2px);
+  }
+
+  button:not(:disabled),
+  a {
+    transition-timing-function: var(--motion-snappy);
+  }
+}
+
+@media (max-width: 639px) {
+  .taxiro-sheet-surface {
+    box-shadow: 0 -1px 0 rgb(255 255 255 / 92%), 0 -22px 58px rgb(16 23 19 / 16%);
+  }
+
+  .taxiro-responsive-sheet[data-mobile-open="false"] .taxiro-sheet-surface {
+    box-shadow: 0 -10px 30px rgb(16 23 19 / 13%);
+  }
+}
+
+@keyframes taxiro-page-arrive {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes taxiro-content-reveal {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes taxiro-overlay-arrive {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes taxiro-status-arrive {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes taxiro-assigned-rider {
+  0%, 100% { box-shadow: 0 0 0 6px rgb(219 248 111 / 30%), 0 16px 38px rgb(16 23 19 / 28%); }
+  50% { box-shadow: 0 0 0 11px rgb(219 248 111 / 10%), 0 20px 44px rgb(16 23 19 / 34%); }
+}
+/* Admin workspace transitions and refined scroll surfaces */
+#admin-overview > section,
+#admin-overview > .taxiro-card {
+  animation: taxiro-content-reveal 420ms var(--motion-snappy) both;
+}
+
+.taxiro-sheet-surface::-webkit-scrollbar,
+.taxiro-card *::-webkit-scrollbar {
+  width: 6px;
+}
+
+.taxiro-sheet-surface::-webkit-scrollbar-track,
+.taxiro-card *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.taxiro-sheet-surface::-webkit-scrollbar-thumb,
+.taxiro-card *::-webkit-scrollbar-thumb {
+  background: #cbd3cb;
+  border-radius: 999px;
+}
+
+button[aria-current="page"] {
+  box-shadow: 0 9px 24px rgb(16 23 19 / 18%);
+  transform: translateY(-1px);
+}
+/* Notification viewport containment */
+.taxiro-notification-panel {
+  animation: taxiro-notification-open 300ms var(--motion-snappy) both;
+  left: max(0.5rem, env(safe-area-inset-left));
+  right: max(0.5rem, env(safe-area-inset-right));
+  top: max(4.25rem, calc(env(safe-area-inset-top) + 3.5rem));
+  width: auto;
+  max-width: calc(100vw - max(1rem, env(safe-area-inset-left) + env(safe-area-inset-right)));
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 640px) {
+  .taxiro-notification-panel {
+    left: auto;
+    right: max(1rem, env(safe-area-inset-right));
+    width: min(23rem, calc(100vw - 2rem));
+  }
+}
+
+@keyframes taxiro-notification-open {
+  from { opacity: 0; transform: translateY(-10px) scale(0.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
