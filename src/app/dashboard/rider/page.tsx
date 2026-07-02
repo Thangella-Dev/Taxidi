@@ -95,12 +95,39 @@ export default function RiderDashboard() {
       setLocation({ lat: current.lat, lng: current.lng });
       setGpsStatus(current.last_seen_at ? `Last live update ${formatTrackingAge(current.last_seen_at)}` : "Tap refresh or allow GPS tracking.");
     }
-    setRiderProfile((riderProfileResult.data as RiderProfile | null) ?? null);
+    let loadedRiderProfile = (riderProfileResult.data as RiderProfile | null) ?? null;
+    const loadedVehicles = (riderVehicleResult.data as RiderVehicle[]) ?? [];
     if (riderVehicleResult.error) {
       setMessage(riderVehicleResult.error.message);
     } else {
-      setRiderVehicles((riderVehicleResult.data as RiderVehicle[]) ?? []);
+      setRiderVehicles(loadedVehicles);
     }
+
+    const verifiedVehicles = loadedVehicles.filter((vehicle) => vehicle.verification_status === "verified");
+    const activeVehicleIsVerified = verifiedVehicles.some(
+      (vehicle) => vehicle.vehicle_type === loadedRiderProfile?.active_vehicle_type,
+    );
+    const hasActiveJob = ((rideResult.data as RideRequest[] | null) ?? []).some(
+      (ride) => ride.assigned_rider_id === riderId && ["assigned", "started"].includes(ride.status),
+    );
+    if (
+      loadedRiderProfile?.verification_status === "verified" &&
+      verifiedVehicles.length > 0 &&
+      !activeVehicleIsVerified &&
+      !hasActiveJob
+    ) {
+      const preferredVehicle = verifiedVehicles.find((vehicle) => vehicle.vehicle_type === "bike") ?? verifiedVehicles[0];
+      const { data: activatedProfile, error: activationError } = await supabase.rpc("set_active_rider_vehicle", {
+        p_vehicle_type: preferredVehicle.vehicle_type,
+      });
+      if (!activationError && activatedProfile) {
+        loadedRiderProfile = activatedProfile as RiderProfile;
+        setMessage(`${getVehicleLabel(preferredVehicle.vehicle_type)} verified and activated for matching.`);
+      } else if (activationError) {
+        setMessage(`Vehicle is verified but could not be activated: ${activationError.message}`);
+      }
+    }
+    setRiderProfile(loadedRiderProfile);
   }, []);
 
   useEffect(() => {
@@ -438,7 +465,9 @@ export default function RiderDashboard() {
 
   const activeVehicleType = riderProfile?.active_vehicle_type ?? null;
   const hasVerifiedActiveVehicle = Boolean(
-    activeVehicleType && riderVehicles.some((vehicle) => vehicle.vehicle_type === activeVehicleType && vehicle.verification_status === "verified"),
+    riderProfile?.verification_status === "verified" &&
+    activeVehicleType &&
+    riderVehicles.some((vehicle) => vehicle.vehicle_type === activeVehicleType && vehicle.verification_status === "verified"),
   );
   const readyRides = rides
     .filter((ride) => isReadyRideVisible(ride) && ride.vehicle_type === activeVehicleType)
@@ -651,6 +680,15 @@ export default function RiderDashboard() {
                   onSwitch={(type) => void switchVehicle(type)}
                   vehicles={riderVehicles}
                 />
+                {!hasVerifiedActiveVehicle ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800" role="status">
+                    {riderProfile?.verification_status !== "verified"
+                      ? "Identity verification is still pending. Demand appears after admin approval."
+                      : riderVehicles.some((vehicle) => vehicle.verification_status === "verified")
+                        ? "Activating your verified vehicle for matching. Keep this screen open for a moment."
+                        : "Add a vehicle and wait for admin verification to receive matching demand."}
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
                   <MiniStat icon={Radio} label="Ready" value={readyRides.length} />
                   <MiniStat icon={Clock3} label="Advance" value={scheduledRides.length} />

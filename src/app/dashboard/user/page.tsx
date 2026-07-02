@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
-import { AppNotifications } from "@/components/AppNotifications";
 import { AppNotificationBell } from "@/components/AppNotificationBell";
 import { CancelRideDialog } from "@/components/CancelRideDialog";
 import { DynamicMapPicker } from "@/components/DynamicMapPicker";
@@ -960,7 +959,7 @@ export default function UserDashboard() {
                       >
                         {detectingPickup
                           ? `Improving GPS accuracy... +/-${pickupAccuracy}m`
-                          : `${pickupAccuracy > MAX_USABLE_LOCATION_ACCURACY_M ? "GPS fix rejected" : "GPS accuracy"} +/-${pickupAccuracy}m`}
+                          : `${pickupAccuracy > MAX_USABLE_LOCATION_ACCURACY_M ? "Low GPS accuracy" : "GPS accuracy"} +/-${pickupAccuracy}m`}
                       </p>
                     ) : null}
                     <LocationSearch
@@ -1267,6 +1266,7 @@ function RideHistoryPanel({
             </Button>
           ) : null
         }
+        defaultOpen
         emptyText="No active rides right now."
         rides={activeRides}
         title="Active rides"
@@ -1286,6 +1286,7 @@ function RideHistoryPanel({
             </Button>
           ) : null
         }
+        defaultOpen
         emptyText="No advance bookings yet."
         rides={upcomingRides}
         title="Upcoming"
@@ -1301,46 +1302,53 @@ function RideHistoryPanel({
 
 function RideSection({
   actionForRide,
+  defaultOpen = false,
   emptyText,
   rides,
   secondaryActionForRide,
   title,
 }: {
   actionForRide?: (ride: RideRequest) => ReactNode;
+  defaultOpen?: boolean;
   emptyText: string;
   rides: RideRequest[];
   secondaryActionForRide?: (ride: RideRequest) => ReactNode;
   title: string;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
-    <div>
-      <div className="mb-3 flex items-center justify-between">
+    <details className="group rounded-lg border border-border bg-muted/60 p-2" onToggle={(event) => setOpen(event.currentTarget.open)} open={open}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-2 py-2">
         <h2 className="text-lg font-black tracking-tight">{title}</h2>
-        <span className="rounded-md bg-muted px-3 py-1 text-xs font-bold text-muted-foreground">
+        <span className="ml-auto rounded-md bg-card px-3 py-1 text-xs font-bold text-muted-foreground">
           {rides.length}
         </span>
+        <ChevronDown className="size-4 shrink-0 transition group-open:rotate-180" />
+      </summary>
+      <div className="mt-2 max-h-[24rem] overflow-y-auto overscroll-contain pr-1">
+        {rides.length ? (
+          <div className="grid min-w-0 gap-3 md:grid-cols-2">
+            {rides.map((ride) => (
+              <RideCard
+                action={
+                  <div className="flex flex-wrap gap-2">
+                    {actionForRide?.(ride)}
+                    {secondaryActionForRide?.(ride)}
+                  </div>
+                }
+                key={ride.id}
+                ride={ride}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+            {emptyText}
+          </div>
+        )}
       </div>
-      {rides.length ? (
-        <div className="grid min-w-0 gap-3 md:grid-cols-2">
-          {rides.map((ride) => (
-            <RideCard
-              action={
-                <div className="flex flex-wrap gap-2">
-                  {actionForRide?.(ride)}
-                  {secondaryActionForRide?.(ride)}
-                </div>
-              }
-              key={ride.id}
-              ride={ride}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          {emptyText}
-        </div>
-      )}
-    </div>
+    </details>
   );
 }
 
@@ -1472,7 +1480,7 @@ function ActiveUserRide({
                     <p className="truncate text-lg font-black">{riderDetails.full_name ?? "Taxiro rider"}</p>
                     <p className="mt-0.5 flex items-center gap-1 text-xs font-bold text-muted-foreground">
                       <Star className="size-3.5 fill-current text-amber-500" />
-                      {Number(riderDetails.rating ?? 5).toFixed(1)} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {riderDetails.completed_rides ?? 0} rides
+                      {Number(riderDetails.rating ?? 5).toFixed(1)} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {riderDetails.completed_rides ?? 0} rides
                     </p>
                   </div>
                   <Badge className="shrink-0 bg-secondary text-secondary-foreground">{getVehicleLabel(riderDetails.vehicle_type)}</Badge>
@@ -1737,9 +1745,18 @@ function UserMenu({
           </button>
         </div>
 
-        <ProfileSettings onSaved={onProfileSaved} profile={profile} />
-
-        <AppNotifications profileId={profile?.id ?? null} />
+        <details className="group rounded-lg border border-border bg-muted">
+          <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card">
+              <UserRound className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1 font-black">Profile and account</span>
+            <ChevronDown className="size-4 shrink-0 transition group-open:rotate-180" />
+          </summary>
+          <div className="mx-3 mb-3 max-h-[min(62dvh,30rem)] overflow-y-auto overscroll-contain rounded-lg bg-white p-2">
+            <ProfileSettings onSaved={onProfileSaved} profile={profile} />
+          </div>
+        </details>
 
         <button className="text-left" onClick={onOpenRides} type="button">
           <MenuCard

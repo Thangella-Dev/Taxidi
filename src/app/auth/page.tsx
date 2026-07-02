@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bike, BriefcaseBusiness, CarFront, CarTaxiFront, UserRound } from "lucide-react";
 
@@ -10,7 +10,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { establishSingleDeviceSession } from "@/lib/account-session";
-import { ensureInitialRiderVehicle, ensureProfile, uploadRiderLivePhoto } from "@/lib/auth";
+import { ensureInitialRiderVehicle, ensureProfile, getCurrentUser, getProfile, uploadRiderLivePhoto } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { normalizeEmail, normalizePhone, normalizeRegistration, validateDrivingLicence, validateEmail, validateFullName, validatePassword, validatePhone, validateVehicleInput } from "@/lib/validation";
 import { VEHICLE_OPTIONS } from "@/lib/vehicles";
@@ -34,6 +34,21 @@ export default function AuthPage() {
   const [message, setMessage] = useState("Create a real Taxiro account stored in Supabase.");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let active = true;
+    void getCurrentUser(supabase).then(async (user) => {
+      if (!user || !active) return;
+      const existingProfile = await getProfile(supabase, user.id);
+      if (!active || !existingProfile) return;
+      router.replace(dashboardForRole(existingProfile.role));
+      router.refresh();
+    });
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   function validateForm() {
     const emailError = validateEmail(email);

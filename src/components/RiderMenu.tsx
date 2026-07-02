@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { HelpCircle, History, Info, ListChecks, LogOut, ShieldCheck, X } from "lucide-react";
+import { ChevronDown, HelpCircle, History, Info, ListChecks, LogOut, ShieldCheck, UserRound, X } from "lucide-react";
 
-import { AppNotifications } from "@/components/AppNotifications";
 import { ProfileSettings } from "@/components/ProfileSettings";
 import { RiderIdentitySettings } from "@/components/RiderIdentitySettings";
 import { RideCard } from "@/components/RideCard";
@@ -49,47 +48,51 @@ export function RiderMenu({
           </button>
         </header>
 
-        <ProfileSettings onSaved={onProfileSaved} profile={profile} />
-        {profile ? <RiderIdentitySettings riderId={profile.id} /> : null}
+        <MenuDisclosure icon={UserRound} title="Profile and account">
+          <ProfileSettings onSaved={onProfileSaved} profile={profile} />
+        </MenuDisclosure>
 
-        <AppNotifications profileId={profile?.id ?? null} />
+        <MenuDisclosure icon={ShieldCheck} title="Identity, vehicles, and payments">
+          {profile ? <RiderIdentitySettings riderId={profile.id} /> : null}
+        </MenuDisclosure>
 
-        <section className="rounded-lg border border-border bg-muted p-4">
-          <p className="flex items-center gap-2 font-black">
-            <History className="size-4" />
-            Ride history
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {history.length} completed or cancelled jobs
-          </p>
-          <div className="mt-3 grid gap-3">
+        <details className="group rounded-lg border border-border bg-muted">
+          <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card">
+              <History className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-black">Ride history</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {history.length} completed or cancelled jobs
+              </span>
+            </span>
+            <ChevronDown className="size-4 shrink-0 transition group-open:rotate-180" />
+          </summary>
+          <div className="mx-3 mb-3 grid max-h-[22rem] gap-3 overflow-y-auto overscroll-contain rounded-lg bg-white p-2">
             {history.length ? (
-              history.slice(0, 3).map((ride) => <RideCard key={ride.id} ride={ride} />)
+              history.map((ride) => <RideCard key={ride.id} ride={ride} />)
             ) : (
-              <p className="rounded-2xl bg-card p-3 text-sm text-muted-foreground">
+              <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
                 Completed rides will appear here.
               </p>
             )}
           </div>
-        </section>
+        </details>
 
-        <section className="rounded-lg border border-border bg-muted p-4">
-          <p className="flex items-center gap-2 font-black">
-            <ShieldCheck className="size-4" />
-            Safety
-          </p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        <MenuDisclosure icon={ShieldCheck} title="Safety guidance">
+          <p className="text-sm leading-6 text-muted-foreground">
             Verify the customer&apos;s four-digit code before starting. Complete a
             ride only after reaching the selected destination.
           </p>
-        </section>
+        </MenuDisclosure>
 
-        <div className="grid gap-3">
-          <RiderInfoLink href="/about" icon={Info} title="About Taxiro" text="Product vision, live ride flow, and MVP limits." />
-          <RiderInfoLink href="/help" icon={HelpCircle} title="Help and support" text="Location, ride-code, chat, payment, and support guidance." />
-          <RiderInfoLink href="/privacy" icon={ShieldCheck} title="Privacy policy" text="Data visibility, rider tracking, and account privacy information." />
-          <RiderInfoLink href="/rules" icon={ListChecks} title="Rules and regulations" text="Safety, misuse, and accepted-ride cancellation fine rules." />
-        </div>
+        <nav className="grid grid-cols-2 gap-2" aria-label="Rider information">
+          <RiderInfoLink href="/about" icon={Info} title="About" />
+          <RiderInfoLink href="/help" icon={HelpCircle} title="Support" />
+          <RiderInfoLink href="/privacy" icon={ShieldCheck} title="Privacy" />
+          <RiderInfoLink href="/rules" icon={ListChecks} title="Rules" />
+        </nav>
 
         <Button className="h-12" onClick={onSignOut} variant="outline">
           <LogOut className="size-4" />
@@ -100,24 +103,44 @@ export function RiderMenu({
   );
 }
 
+function MenuDisclosure({
+  children,
+  icon: Icon,
+  title,
+}: {
+  children: React.ReactNode;
+  icon: typeof HelpCircle;
+  title: string;
+}) {
+  return (
+    <details className="group rounded-lg border border-border bg-muted">
+      <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card">
+          <Icon className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1 font-black">{title}</span>
+        <ChevronDown className="size-4 shrink-0 transition group-open:rotate-180" />
+      </summary>
+      <div className="mx-3 mb-3 max-h-[min(62dvh,32rem)] overflow-y-auto overscroll-contain rounded-lg bg-white p-2">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 function RiderInfoLink({
   href,
   icon: Icon,
-  text,
   title,
 }: {
   href: string;
   icon: typeof HelpCircle;
-  text: string;
   title: string;
 }) {
   return (
-    <Link className="rounded-lg border border-border bg-muted p-4 transition hover:border-primary/20 hover:bg-secondary" href={href}>
-      <p className="flex items-center gap-2 font-black">
-        <Icon className="size-4" />
-        {title}
-      </p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+    <Link className="flex min-h-12 items-center gap-2 rounded-lg border border-border bg-muted p-3 font-black transition hover:border-primary/20 hover:bg-secondary" href={href}>
+      <Icon className="size-4 shrink-0" />
+      <span className="truncate text-sm">{title}</span>
     </Link>
   );
 }

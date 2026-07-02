@@ -10,7 +10,7 @@ export type RiderTrackingUpdate = LatLng & {
 
 const PRECISE_TARGET_ACCURACY_M = 60;
 export const MAX_USABLE_LOCATION_ACCURACY_M = 250;
-const PRECISE_LOCATION_TIMEOUT_MS = 12_000;
+const PRECISE_LOCATION_TIMEOUT_MS = 18_000;
 const MAX_RIDER_TRACKING_ACCURACY_M = 100;
 const RIDER_WRITE_INTERVAL_MS = 5_000;
 const RIDER_HEARTBEAT_INTERVAL_MS = 15_000;
@@ -51,13 +51,9 @@ function ensureGeolocationReady() {
   }
 }
 
-function requestCurrentPosition() {
+function requestCurrentPosition(options: PositionOptions) {
   return new Promise<GeolocationPosition>((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: PRECISE_LOCATION_TIMEOUT_MS,
-    });
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
 }
 
@@ -71,11 +67,27 @@ export async function getPromptedCurrentLocation(onProgress?: (accuracyM: number
 
   let best: GeolocationPosition;
   try {
-    best = await requestCurrentPosition();
-    onProgress?.(Math.round(best.coords.accuracy));
+    best = await requestCurrentPosition({
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: PRECISE_LOCATION_TIMEOUT_MS,
+    });
   } catch (error) {
-    throw new Error(geolocationErrorMessage(error as GeolocationPositionError));
+    const gpsError = error as GeolocationPositionError;
+    if (gpsError.code === gpsError.PERMISSION_DENIED) {
+      throw new Error(geolocationErrorMessage(gpsError));
+    }
+    try {
+      best = await requestCurrentPosition({
+        enableHighAccuracy: false,
+        maximumAge: 60_000,
+        timeout: 10_000,
+      });
+    } catch (fallbackError) {
+      throw new Error(geolocationErrorMessage(fallbackError as GeolocationPositionError));
+    }
   }
+  onProgress?.(Math.round(best.coords.accuracy));
 
   return new Promise<GeolocationPosition>((resolve, reject) => {
     let settled = false;
@@ -88,16 +100,8 @@ export async function getPromptedCurrentLocation(onProgress?: (accuracyM: number
       if (timer !== null) window.clearTimeout(timer);
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
 
-      if (position && position.coords.accuracy <= MAX_USABLE_LOCATION_ACCURACY_M) {
-        resolve(position);
-        return;
-      }
       if (position) {
-        reject(
-          new Error(
-            `GPS is only accurate to +/-${Math.round(position.coords.accuracy)}m. Move near a window or outdoors, or choose the exact point on the map.`,
-          ),
-        );
+        resolve(position);
         return;
       }
       reject(new Error(geolocationErrorMessage(error)));
