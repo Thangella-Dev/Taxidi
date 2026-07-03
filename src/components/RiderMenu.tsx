@@ -99,7 +99,7 @@ export function RiderMenu({
 
         <nav className="grid grid-cols-2 gap-2" aria-label="Rider information">
           <RiderInfoLink href="/about" icon={Info} title="About" />
-          <RiderInfoLink href="/help" icon={HelpCircle} title="Support" />
+          <RiderInfoLink href="/support" icon={HelpCircle} title="Support" />
           <RiderInfoLink href="/privacy" icon={ShieldCheck} title="Privacy" />
           <RiderInfoLink href="/rules" icon={ListChecks} title="Rules" />
         </nav>

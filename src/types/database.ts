@@ -207,3 +207,28 @@ export type AdminBroadcast = {
   delivered_count: number;
   created_at: string;
 };
+export type SupportTicket = {
+  id: string;
+  created_by: string;
+  related_ride_id: string | null;
+  assigned_to: string | null;
+  category: "account" | "ride" | "payment" | "safety" | "rider" | "technical" | "other";
+  priority: "low" | "normal" | "high" | "urgent";
+  status: "open" | "in_progress" | "waiting_user" | "resolved" | "closed";
+  subject: string;
+  description: string;
+  resolution: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+};
+
+export type SavedPlace = {
+  id: string;
+  profile_id: string;
+  label: string;
+  address: string;
+  lat: number;
+  lng: number;
+  created_at: string;
+};
