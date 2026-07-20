@@ -956,5 +956,7 @@ Repair completed:
   - `20260624055920_enable_realtime_replica_identity.sql`
 - Verified remote-vs-local migration comparison: **0 remote versions missing locally**.
 - Verified local migration safety with `npm run db:validate`: **28 additive Supabase migrations validated**.
+- Removed hidden UTF-8 BOM bytes from SQL migrations that caused Supabase Preview to fail at statement 0.
+- Added a local migration validator guard so BOM-encoded SQL files fail before push.
 
 This repair changes local migration history files only. It does not delete production tables, rows, users, or Supabase data.

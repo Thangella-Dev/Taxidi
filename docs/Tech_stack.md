@@ -20,6 +20,7 @@ Completed today:
 - Split the realtime migration into the two remote migration versions.
 - Confirmed remote-vs-local comparison now has 0 missing remote versions.
 - Validated 28 additive Supabase migrations locally.
+- Added BOM-free SQL migration enforcement so Supabase Preview does not fail on hidden file encoding bytes.
 
 This should unblock Supabase Preview checks caused by migration history mismatch.
 ## 20 July 2026 Admin Control System Update

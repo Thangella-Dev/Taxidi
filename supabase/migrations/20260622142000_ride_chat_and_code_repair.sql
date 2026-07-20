@@ -1,4 +1,4 @@
-﻿-- Daily ride flow hardening: robust private codes, map demand signals support, and ride chat.
+-- Daily ride flow hardening: robust private codes, map demand signals support, and ride chat.
 -- Additive migration only; no tables or rows are deleted.
 
 create table if not exists public.ride_chat_messages (

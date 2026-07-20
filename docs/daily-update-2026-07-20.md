@@ -30,7 +30,7 @@ Today I completed a real production-readiness upgrade for Taxiro. The work focus
   - Deployment blockers card,
   - Migration recovery card.
 - Kept the health endpoint secret-safe. It does not return Supabase keys, service role keys, cron secrets, or raw environment values.
-- Updated README and Tech Stack documentation with today�s real engineering work.
+- Updated README and Tech Stack documentation with today's real engineering work.
 
 ## Verification Completed
 
@@ -95,3 +95,5 @@ Completed after the Admin Health work:
 - Split the combined realtime migration into the two remote migration versions.
 - Re-ran remote-vs-local comparison and confirmed **0 remote versions are missing locally**.
 - Re-ran `npm run db:validate`; 28 additive migrations passed.
+- Fixed the follow-up Supabase Preview parser failure by removing hidden UTF-8 BOM bytes from affected SQL migrations.
+- Upgraded `npm run db:validate` to fail if any future migration includes a UTF-8 BOM.

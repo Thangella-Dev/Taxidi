@@ -34,7 +34,7 @@ Taxiro is now a feature-rich ride-booking web MVP with user, rider, and admin ap
 
 ## 20 July 2026 Production Reliability Work
 
-Today�s work improved Taxiro�s operational diagnostics and production-readiness visibility.
+Today's work improved Taxiro's operational diagnostics and production-readiness visibility.
 
 Completed:
 

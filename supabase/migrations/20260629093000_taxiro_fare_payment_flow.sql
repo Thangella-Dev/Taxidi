@@ -1,4 +1,4 @@
-﻿-- Taxiro fare split, rider UPI QR, and payment confirmation flow.
+-- Taxiro fare split, rider UPI QR, and payment confirmation flow.
 -- Additive only; preserves existing ride and rider data.
 
 alter table public.ride_requests
