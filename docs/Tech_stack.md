@@ -1,11 +1,51 @@
 # Taxiro Technology Stack And Engineering Assessment
 
-**Report date:** 16 July 2026
+**Report date:** 20 July 2026
 **Application:** Taxiro
 **Current version:** 0.1.0
 **Product stage:** Advanced full-stack web MVP approaching controlled pilot readiness
 
 ## Executive Assessment
+
+
+## 20 July 2026 Engineering Update
+
+Today's real engineering work improved Taxiro's production operations layer.
+
+Completed:
+
+- Added timeout-safe Supabase readiness probes in `/api/health` using `AbortController`.
+- Added no-store cache behavior for `/api/health` so the admin panel reads fresh operational state.
+- Added health `summary` payload with passing/failing counts and pilot-readiness status.
+- Added `deploymentBlockers` payload for required failures, missing migrations, and degraded operational probes.
+- Added Admin Health **Readiness summary** and **Deployment blockers** cards.
+- Preserved secret-safe diagnostics: the endpoint exposes only boolean/status/file-name metadata.
+
+Verification completed:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm run test` passed with 11 unit tests.
+- `npm run build` passed with 24 Next.js app routes.
+## 17 July 2026 Engineering Update
+
+Today's real engineering task strengthened Taxiro's production diagnostics and migration recovery workflow.
+
+Completed:
+
+- `/api/health` now uses the Node.js runtime and reads the local `supabase/migrations` directory safely from the server.
+- Added `migrationManifest` to the health payload:
+  - `migrationCount`
+  - `latestMigration`
+  - required operational SQL files
+  - present/missing status for each required file
+- Added a `localMigrationFiles` health check so Admin Health can show whether deployed source files match the app's production database expectations.
+- Added an Admin Health **Migration recovery** card with operational migration file visibility.
+- Kept the health endpoint secret-safe: no Supabase service role, anon key, cron secret, or environment values are exposed.
+
+Why this matters:
+
+This makes production support easier when Supabase reports missing tables/functions or Vercel deploys code before database migrations are applied. Admins can now see both sides of the problem: whether the database object is reachable and whether the matching SQL file exists in the deployed source.
 ## 16 July 2026 Production Stabilization Update
 
 Today's work focused on deployment reliability and graceful failure handling instead of adding new UI-only features.
@@ -688,6 +728,3 @@ Verification completed today:
 Reason:
 
 - Production testers naturally try short URLs like `/admin`. This update makes those URLs work while keeping the real dashboard routes under `/dashboard/*`.
-
-
-

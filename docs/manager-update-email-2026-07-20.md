@@ -1,0 +1,44 @@
+Subject: Taxiro Development Update - 20 July 2026
+
+Hi Sir,
+
+This update covers the Taxiro work completed today, 20 July 2026.
+
+Today I focused on production reliability and Admin Health improvements. The main goal was to make deployment and Supabase migration issues easier to detect from inside the app, without depending only on browser console errors or external logs.
+
+Completed:
+
+- Hardened `/api/health` Supabase readiness probes with a 6-second timeout.
+- Added no-store cache behavior for `/api/health` so the admin panel shows fresh health data.
+- Added a structured readiness summary showing passing checks, required failures, missing database objects, missing local migration files, and pilot-ready status.
+- Added a deployment-blocker list so admins can immediately see what is stopping production readiness.
+- Added a migration manifest showing local SQL migration count, latest migration file, and required operational migration file availability.
+- Upgraded the Admin Health UI with:
+  - Readiness summary card,
+  - Deployment blockers card,
+  - Migration recovery card.
+- Kept all health diagnostics secret-safe. No Supabase keys, service-role values, cron secrets, or raw sensitive env values are exposed.
+- Updated README, Tech Stack, daily update, and progress documentation.
+
+Verification completed:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm run test` passed with 11 unit tests.
+- `npm run build` passed.
+- Next.js 16.2.7 production build completed successfully with 24 app routes.
+
+Current deployment note:
+
+The app now has stronger Admin Health diagnostics for production support. The next important step is to apply any pending Supabase migrations and then re-check Admin Health in the deployed app.
+
+Next planned work:
+
+- Apply pending Supabase migrations in production.
+- Configure real service areas and pricing rules.
+- Run two-device user/rider QA on production.
+- Expand authenticated E2E tests for the full ride lifecycle.
+
+Regards,
+
+Thangella G

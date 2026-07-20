@@ -1,19 +1,43 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+type HealthStatus =
+  "ok" | "missing_migration" | "access_restricted" | "skipped" | "degraded";
 
 type HealthCheck = {
   description: string;
   ok: boolean;
   required: boolean;
-  status?:
-    "ok" | "missing_migration" | "access_restricted" | "skipped" | "degraded";
+  status?: HealthStatus;
   migration?: string;
 };
 
+type MigrationManifest = {
+  latestMigration: string | null;
+  migrationCount: number;
+  requiredFiles: { feature: string; file: string; present: boolean }[];
+};
+
+const SUPABASE_PROBE_TIMEOUT_MS = 6_000;
+
 const REQUIRED_OPERATIONAL_MIGRATIONS = [
-  "20260701203000_customer_nearby_rider_preview.sql",
-  "20260703110000_operational_and_product_foundation.sql",
-  "20260706100000_operational_enforcement_and_fraud.sql",
-];
+  {
+    feature: "Customer nearby rider preview",
+    file: "20260701203000_customer_nearby_rider_preview.sql",
+  },
+  {
+    feature: "Service areas and vehicle pricing rules",
+    file: "20260703110000_operational_and_product_foundation.sql",
+  },
+  {
+    feature: "Operational enforcement and fraud signals",
+    file: "20260706100000_operational_enforcement_and_fraud.sql",
+  },
+] as const;
 
 export async function GET() {
   const supabaseUrl =
@@ -66,12 +90,27 @@ export async function GET() {
     },
   };
 
-  const databaseChecks = await getDatabaseReadinessChecks({
-    hasPublicDatabaseConfig,
-    supabaseAnonKey,
-    supabaseUrl,
+  const [databaseChecks, migrationManifest] = await Promise.all([
+    getDatabaseReadinessChecks({
+      hasPublicDatabaseConfig,
+      supabaseAnonKey,
+      supabaseUrl,
+    }),
+    getMigrationManifest(),
+  ]);
+  const localMigrationsOk = migrationManifest.requiredFiles.every(
+    (item) => item.present,
+  );
+  Object.assign(checks, databaseChecks, {
+    localMigrationFiles: {
+      description: localMigrationsOk
+        ? `All required operational migration files are present locally. Latest local migration: ${migrationManifest.latestMigration ?? "none"}.`
+        : "One or more required operational migration files are missing from the deployed source.",
+      ok: localMigrationsOk,
+      required: false,
+      status: localMigrationsOk ? "ok" : "degraded",
+    } satisfies HealthCheck,
   });
-  Object.assign(checks, databaseChecks);
 
   const requiredOk = Object.values(checks)
     .filter((check) => check.required)
@@ -81,8 +120,10 @@ export async function GET() {
     .every((check) => check.ok);
   const status =
     requiredOk && optionalOk ? "ok" : requiredOk ? "degraded" : "failed";
+  const summary = buildHealthSummary(checks, migrationManifest);
+  const deploymentBlockers = buildDeploymentBlockers(checks);
 
-  return NextResponse.json(
+  const response = NextResponse.json(
     {
       checks,
       deployment: {
@@ -93,20 +134,28 @@ export async function GET() {
           ? `https://${process.env.VERCEL_URL}`
           : (process.env.NEXT_PUBLIC_SITE_URL ?? "local"),
       },
+      deploymentBlockers,
       generatedAt: new Date().toISOString(),
+      migrationManifest,
       recommendations: [
         "Set Supabase GitHub integration working directory to blank or '.' because this repo stores supabase/migrations at the repository root.",
         "Deploy from a fresh commit authored by the Vercel team member account, not an older failed deployment authored by an outside account.",
         "Keep Vercel Hobby cron on '0 0 * * *'. Use Vercel Pro or an external scheduler for five-minute ready-signal expiry.",
         "If database readiness shows Missing migration, apply the listed SQL file in Supabase SQL Editor and reload the PostgREST schema cache.",
+        "Use the migration manifest to confirm the deployed source contains the same migration files expected by production Supabase.",
       ],
-      requiredOperationalMigrations: REQUIRED_OPERATIONAL_MIGRATIONS,
+      requiredOperationalMigrations: REQUIRED_OPERATIONAL_MIGRATIONS.map(
+        (item) => item.file,
+      ),
       service: "taxiro-web",
       status,
+      summary,
       version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "local",
     },
     { status: requiredOk ? 200 : 503 },
   );
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  return response;
 }
 
 async function getDatabaseReadinessChecks({
@@ -122,15 +171,15 @@ async function getDatabaseReadinessChecks({
     return {
       serviceAreasTable: skippedDatabaseCheck(
         "service_areas table check skipped until Supabase public env vars are configured.",
-        "20260703110000_operational_and_product_foundation.sql",
+        REQUIRED_OPERATIONAL_MIGRATIONS[1].file,
       ),
       pricingRulesTable: skippedDatabaseCheck(
         "pricing_rules table check skipped until Supabase public env vars are configured.",
-        "20260703110000_operational_and_product_foundation.sql",
+        REQUIRED_OPERATIONAL_MIGRATIONS[1].file,
       ),
       nearbyRidersRpc: skippedDatabaseCheck(
         "get_nearby_available_riders RPC check skipped until Supabase public env vars are configured.",
-        "20260701203000_customer_nearby_rider_preview.sql",
+        REQUIRED_OPERATIONAL_MIGRATIONS[0].file,
       ),
     } satisfies Record<string, HealthCheck>;
   }
@@ -140,28 +189,30 @@ async function getDatabaseReadinessChecks({
       probeSupabaseObject({
         description:
           "service_areas table is available for configured service-zone pricing.",
-        migration: "20260703110000_operational_and_product_foundation.sql",
-        request: () =>
+        migration: REQUIRED_OPERATIONAL_MIGRATIONS[1].file,
+        request: (signal) =>
           fetch(`${supabaseUrl}/rest/v1/service_areas?select=id&limit=1`, {
             headers: supabaseHeaders(supabaseAnonKey),
             cache: "no-store",
+            signal,
           }),
       }),
       probeSupabaseObject({
         description:
           "pricing_rules table is available for configured vehicle and peak pricing.",
-        migration: "20260703110000_operational_and_product_foundation.sql",
-        request: () =>
+        migration: REQUIRED_OPERATIONAL_MIGRATIONS[1].file,
+        request: (signal) =>
           fetch(`${supabaseUrl}/rest/v1/pricing_rules?select=id&limit=1`, {
             headers: supabaseHeaders(supabaseAnonKey),
             cache: "no-store",
+            signal,
           }),
       }),
       probeSupabaseObject({
         description:
           "get_nearby_available_riders RPC is available for customer map rider previews.",
-        migration: "20260701203000_customer_nearby_rider_preview.sql",
-        request: () =>
+        migration: REQUIRED_OPERATIONAL_MIGRATIONS[0].file,
+        request: (signal) =>
           fetch(`${supabaseUrl}/rest/v1/rpc/get_nearby_available_riders`, {
             body: JSON.stringify({
               p_lat: 17.385,
@@ -174,6 +225,7 @@ async function getDatabaseReadinessChecks({
               "Content-Type": "application/json",
             },
             method: "POST",
+            signal,
           }),
       }),
     ]);
@@ -183,6 +235,87 @@ async function getDatabaseReadinessChecks({
     pricingRulesTable,
     nearbyRidersRpc,
   } satisfies Record<string, HealthCheck>;
+}
+
+async function getMigrationManifest(): Promise<MigrationManifest> {
+  const migrationDirectory = path.join(process.cwd(), "supabase", "migrations");
+
+  try {
+    const files = (await fs.readdir(migrationDirectory))
+      .filter((file) => file.endsWith(".sql"))
+      .sort();
+    const fileSet = new Set(files);
+
+    return {
+      latestMigration: files.at(-1) ?? null,
+      migrationCount: files.length,
+      requiredFiles: REQUIRED_OPERATIONAL_MIGRATIONS.map((item) => ({
+        feature: item.feature,
+        file: item.file,
+        present: fileSet.has(item.file),
+      })),
+    };
+  } catch {
+    return {
+      latestMigration: null,
+      migrationCount: 0,
+      requiredFiles: REQUIRED_OPERATIONAL_MIGRATIONS.map((item) => ({
+        feature: item.feature,
+        file: item.file,
+        present: false,
+      })),
+    };
+  }
+}
+
+function buildHealthSummary(
+  checks: Record<string, HealthCheck>,
+  migrationManifest: MigrationManifest,
+) {
+  const entries = Object.values(checks);
+  const missingMigrationChecks = entries.filter(
+    (check) => check.status === "missing_migration",
+  ).length;
+  const failingRequiredChecks = entries.filter(
+    (check) => check.required && !check.ok,
+  ).length;
+  const degradedOptionalChecks = entries.filter(
+    (check) =>
+      !check.required && !check.ok && check.status !== "missing_migration",
+  ).length;
+  const missingLocalMigrationFiles = migrationManifest.requiredFiles.filter(
+    (item) => !item.present,
+  ).length;
+
+  return {
+    degradedOptionalChecks,
+    failingRequiredChecks,
+    missingLocalMigrationFiles,
+    missingMigrationChecks,
+    passingChecks: entries.filter((check) => check.ok).length,
+    readyForPilot:
+      failingRequiredChecks === 0 &&
+      missingMigrationChecks === 0 &&
+      missingLocalMigrationFiles === 0,
+    totalChecks: entries.length,
+  };
+}
+
+function buildDeploymentBlockers(checks: Record<string, HealthCheck>) {
+  return Object.entries(checks)
+    .filter(
+      ([, check]) =>
+        check.required ||
+        check.status === "missing_migration" ||
+        (!check.ok && check.status === "degraded"),
+    )
+    .filter(([, check]) => !check.ok)
+    .map(([key, check]) => ({
+      description: check.description,
+      key,
+      migration: check.migration ?? null,
+      status: check.status ?? "degraded",
+    }));
 }
 
 function supabaseHeaders(anonKey: string) {
@@ -212,10 +345,16 @@ async function probeSupabaseObject({
 }: {
   description: string;
   migration: string;
-  request: () => Promise<Response>;
+  request: (signal: AbortSignal) => Promise<Response>;
 }): Promise<HealthCheck> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    SUPABASE_PROBE_TIMEOUT_MS,
+  );
+
   try {
-    const response = await request();
+    const response = await request(controller.signal);
 
     if (response.status === 404) {
       return {
@@ -254,13 +393,18 @@ async function probeSupabaseObject({
       status: "degraded",
       migration,
     };
-  } catch {
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
     return {
-      description: `${description} Probe could not reach Supabase from the current deployment/runtime.`,
+      description: timedOut
+        ? `${description} Probe timed out after ${SUPABASE_PROBE_TIMEOUT_MS / 1000}s; check Supabase network reachability from Vercel.`
+        : `${description} Probe could not reach Supabase from the current deployment/runtime.`,
       ok: false,
       required: false,
       status: "degraded",
       migration,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }

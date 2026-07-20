@@ -103,6 +103,8 @@ The MVP currently includes:
 - Booking now gracefully falls back to safe per-km pricing when production Supabase is missing `service_areas` or `pricing_rules` migrations.
 - Customer nearby-rider preview now disables quietly when `get_nearby_available_riders` is missing, preventing repeated 404 console/API spam.
 - Admin Health now checks database readiness for `service_areas`, `pricing_rules`, and `get_nearby_available_riders`, and shows the exact migration file needed when production Supabase is behind.
+- Admin Health now includes a migration recovery manifest that confirms required SQL files are present in the deployed source, shows local migration count, and displays the latest local migration.
+- Admin Health now includes timeout-safe Supabase probes, a pilot readiness summary, and a deployment-blocker list so production issues are visible without reading raw logs.
 - Vercel Hobby cron compatibility is preserved with the daily `0 0 * * *` schedule; five-minute ready-signal expiry is documented as requiring Vercel Pro or an external scheduler.
 
 ## Main Routes
@@ -845,3 +847,60 @@ npm run build
 
 Build result: Next.js 16.2.7 production build passed with 24 app routes.
 
+
+## 17 July 2026 Production Readiness Health Upgrade
+
+Today's development work added a stronger production diagnostics layer to help resolve Supabase/Vercel deployment drift faster.
+
+Completed:
+
+- `/api/health` now runs on the Node.js runtime so it can safely inspect the local `supabase/migrations` directory on the server.
+- Added a migration manifest to `/api/health` with:
+  - total local SQL migration count,
+  - latest local migration filename,
+  - required operational migration files,
+  - per-file present/missing status.
+- Added a new Admin Health **Migration recovery** card that displays the required migration files directly in the admin dashboard.
+- Added a `localMigrationFiles` health check so admins can see whether the deployed source contains the SQL files production Supabase depends on.
+- Kept all health output secret-safe: the endpoint returns booleans, file names, statuses, and deployment metadata only.
+
+Verification completed on 17 July 2026:
+
+```bash
+npm run typecheck
+```
+
+Full lint/build verification is part of the final handoff for today's work.
+
+## 20 July 2026 Admin Health And Production Reliability Upgrade
+
+Today's development work focused on must-have production operations improvements for Taxiro.
+
+Completed:
+
+- Hardened `/api/health` Supabase checks with a 6-second timeout per probe so Admin Health does not hang if Supabase or the network is slow.
+- Added `Cache-Control: no-store` to health responses so admins always see fresh deployment/database status.
+- Added a structured readiness summary to `/api/health`:
+  - total checks,
+  - passing checks,
+  - required failures,
+  - missing database objects,
+  - missing local migration files,
+  - pilot-ready boolean.
+- Added a deployment-blocker list to `/api/health` for required failures, missing migrations, and degraded operational checks.
+- Upgraded the Admin Health screen with:
+  - Readiness summary card,
+  - Deployment blockers card,
+  - Migration recovery card from the previous health-manifest work.
+- Kept all health output secret-safe: no Supabase keys, service role keys, or cron secrets are returned.
+
+Verification completed on 20 July 2026:
+
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+```
+
+Result: TypeScript passed, ESLint passed, 11 unit tests passed, and the Next.js 16.2.7 production build passed with 24 app routes.

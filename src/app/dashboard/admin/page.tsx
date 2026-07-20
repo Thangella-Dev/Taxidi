@@ -88,10 +88,30 @@ type HealthPayload = {
     region: string;
     url: string;
   };
+  deploymentBlockers?: {
+    description: string;
+    key: string;
+    migration: string | null;
+    status: string;
+  }[];
   generatedAt: string;
+  migrationManifest?: {
+    latestMigration: string | null;
+    migrationCount: number;
+    requiredFiles: { feature: string; file: string; present: boolean }[];
+  };
   recommendations: string[];
   service: string;
   status: "degraded" | "failed" | "ok";
+  summary?: {
+    degradedOptionalChecks: number;
+    failingRequiredChecks: number;
+    missingLocalMigrationFiles: number;
+    missingMigrationChecks: number;
+    passingChecks: number;
+    readyForPilot: boolean;
+    totalChecks: number;
+  };
   version: string;
 };
 
@@ -869,6 +889,140 @@ function SystemHealthPanel({
               }
             />
           </div>
+        </Card>
+
+        <Card className="rounded-[1.75rem] p-5">
+          <CardHeader className="mb-3 p-0">
+            <CardTitle>Readiness summary</CardTitle>
+            <CardDescription>
+              Fast production signal from the latest live health check.
+            </CardDescription>
+          </CardHeader>
+          {health?.summary ? (
+            <div className="grid gap-3">
+              <div
+                className={`rounded-2xl p-4 ${health.summary.readyForPilot ? "bg-lime-100 text-lime-900" : "bg-amber-100 text-amber-900"}`}
+              >
+                <p className="text-xs font-black uppercase tracking-[0.14em] opacity-70">
+                  Pilot readiness
+                </p>
+                <p className="mt-1 text-2xl font-black">
+                  {health.summary.readyForPilot ? "Ready" : "Review needed"}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <DeploymentFact
+                  label="Passing checks"
+                  value={`${health.summary.passingChecks}/${health.summary.totalChecks}`}
+                />
+                <DeploymentFact
+                  label="Required failures"
+                  value={String(health.summary.failingRequiredChecks)}
+                />
+                <DeploymentFact
+                  label="Missing DB objects"
+                  value={String(health.summary.missingMigrationChecks)}
+                />
+                <DeploymentFact
+                  label="Local SQL gaps"
+                  value={String(health.summary.missingLocalMigrationFiles)}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-muted p-3 text-sm font-semibold text-muted-foreground">
+              Refresh health to load readiness summary.
+            </p>
+          )}
+        </Card>
+
+        {health?.deploymentBlockers?.length ? (
+          <Card className="rounded-[1.75rem] border-amber-200 bg-amber-50 p-5 text-amber-950">
+            <CardHeader className="mb-3 p-0">
+              <CardTitle>Deployment blockers</CardTitle>
+              <CardDescription className="text-amber-800">
+                Fix these before treating production as pilot-ready.
+              </CardDescription>
+            </CardHeader>
+            <div className="grid gap-2">
+              {health.deploymentBlockers.map((item) => (
+                <div
+                  className="rounded-2xl bg-white/70 p-3 text-sm"
+                  key={item.key}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-black">{humanizeHealthKey(item.key)}</p>
+                    <span className="rounded-full bg-amber-200 px-2.5 py-1 text-[11px] font-black uppercase text-amber-950">
+                      {item.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 leading-5 text-amber-900">
+                    {item.description}
+                  </p>
+                  {item.migration ? (
+                    <p className="mt-2 break-all text-xs font-black">
+                      Migration: {item.migration}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+        <Card className="rounded-[1.75rem] p-5">
+          <CardHeader className="mb-3 p-0">
+            <CardTitle>Migration recovery</CardTitle>
+            <CardDescription>
+              Confirm the deployed source contains the SQL files production
+              Supabase depends on.
+            </CardDescription>
+          </CardHeader>
+          {health?.migrationManifest ? (
+            <div className="grid gap-3">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-2xl bg-muted p-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">
+                    Local files
+                  </p>
+                  <p className="mt-1 text-xl font-black">
+                    {health.migrationManifest.migrationCount}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-muted p-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">
+                    Latest
+                  </p>
+                  <p className="mt-1 truncate text-xs font-black">
+                    {health.migrationManifest.latestMigration ?? "none"}
+                  </p>
+                </div>
+              </div>
+              {health.migrationManifest.requiredFiles.map((item) => (
+                <div
+                  className="rounded-2xl border border-border bg-muted/60 p-3"
+                  key={item.file}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-black">{item.feature}</p>
+                      <p className="mt-1 break-all text-xs font-semibold text-muted-foreground">
+                        {item.file}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${item.present ? "bg-lime-100 text-lime-800" : "bg-red-100 text-red-800"}`}
+                    >
+                      {item.present ? "local" : "missing"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-muted p-3 text-sm font-semibold text-muted-foreground">
+              Refresh health to load the migration manifest.
+            </p>
+          )}
         </Card>
 
         <Card className="rounded-[1.75rem] p-5">
