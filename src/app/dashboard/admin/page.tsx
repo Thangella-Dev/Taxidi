@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { getCurrentUser, getProfile } from "@/lib/auth";
 import { calculateFareBreakdown, formatMoney } from "@/lib/fare";
 import { getSupabase } from "@/lib/supabase";
+import { createSafeSignedUrl } from "@/lib/storage";
 import { useLiveResync } from "@/lib/useLiveResync";
 import { getVehicleLabel } from "@/lib/vehicles";
 import type {
@@ -217,10 +218,13 @@ export default function AdminDashboard() {
       loadedRiderProfiles
         .filter((item) => item.live_selfie_path)
         .map(async (item) => {
-          const { data } = await supabase.storage
-            .from("rider-verification")
-            .createSignedUrl(item.live_selfie_path as string, 600);
-          return [item.rider_id, data?.signedUrl ?? ""] as const;
+          const signedUrl = await createSafeSignedUrl(
+            supabase,
+            "rider-verification",
+            item.live_selfie_path,
+            600,
+          );
+          return [item.rider_id, signedUrl] as const;
         }),
     );
     setRiderSelfieUrls(Object.fromEntries(signedSelfies));

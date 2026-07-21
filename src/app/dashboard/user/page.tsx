@@ -75,6 +75,7 @@ import {
 } from "@/lib/safety";
 import { calculateTaxiroFareEstimate } from "@/lib/pricing";
 import { getSupabase } from "@/lib/supabase";
+import { createSafeSignedUrl } from "@/lib/storage";
 import {
   getPromptedCurrentLocation,
   MAX_USABLE_LOCATION_ACCURACY_M,
@@ -294,10 +295,12 @@ export default function UserDashboard() {
           ) as AssignedRiderDetails | null;
           let photoUrl = "";
           if (detail?.photo_path) {
-            const { data: signedPhoto } = await supabase.storage
-              .from("rider-verification")
-              .createSignedUrl(detail.photo_path, 900);
-            photoUrl = signedPhoto?.signedUrl ?? "";
+            photoUrl = await createSafeSignedUrl(
+              supabase,
+              "rider-verification",
+              detail.photo_path,
+              900,
+            );
           }
           return {
             detail,

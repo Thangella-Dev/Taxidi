@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { uploadRiderLivePhoto } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
+import { createSafeSignedUrl } from "@/lib/storage";
 import { normalizeRegistration, validateDrivingLicence, validateUpiId, validateVehicleInput } from "@/lib/validation";
 import { VEHICLE_OPTIONS, getVehicleLabel } from "@/lib/vehicles";
 import type { RiderProfile, RiderVehicle, VehicleType } from "@/types/database";
@@ -64,8 +65,8 @@ export function RiderIdentitySettings({ riderId }: { riderId: string }) {
         setUpiId(profile.upi_id ?? "");
         setUpiQrImageUrl(profile.upi_qr_image_url ?? "");
         if (profile.live_selfie_path) {
-          void supabase.storage.from("rider-verification").createSignedUrl(profile.live_selfie_path, 600)
-            .then(({ data }) => setLivePhotoUrl(data?.signedUrl ?? ""));
+          void createSafeSignedUrl(supabase, "rider-verification", profile.live_selfie_path, 600)
+            .then(setLivePhotoUrl);
         }
       }
       if (vehicleResult.data) {
@@ -108,8 +109,8 @@ export function RiderIdentitySettings({ riderId }: { riderId: string }) {
     setMessage("Uploading live identity photo...");
     try {
       const path = await uploadRiderLivePhoto(supabase, riderId, photo);
-      const { data } = await supabase.storage.from("rider-verification").createSignedUrl(path, 600);
-      setLivePhotoUrl(data?.signedUrl ?? "");
+      const signedUrl = await createSafeSignedUrl(supabase, "rider-verification", path, 600);
+      setLivePhotoUrl(signedUrl);
       setDetails((current) => current ? {
         ...current,
         identity_rejection_reason: null,
