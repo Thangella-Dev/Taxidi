@@ -656,16 +656,19 @@ export default function RiderDashboard() {
       p_reason: reason,
       p_ride_id: ride.id,
     });
+    const recoveryMessage = isAuthOrPermissionError(error)
+      ? "Could not cancel because your session or assignment permission is out of sync. Refresh once or sign in again, then try cancel again."
+      : error?.message;
     setMessage(
       error
-        ? `Could not cancel: ${error.message}`
+        ? `Could not cancel: ${recoveryMessage}`
         : "Ride cancelled and released.",
     );
     if (!error) {
       setCancelTarget(null);
     }
     await loadRiderData(profile.id);
-    return error?.message ?? null;
+    return recoveryMessage ?? null;
   }
 
   async function markReachedDrop(ride: RideRequest) {

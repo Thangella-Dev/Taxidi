@@ -56,7 +56,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ensureProfile, getCurrentUser, getProfile } from "@/lib/auth";
+import { ensureProfile, getCurrentUser, getProfile, isAuthOrPermissionError } from "@/lib/auth";
 import { getRoutePath, getRouteSummary, reverseGeocode } from "@/lib/maps";
 import {
   formatMoney,
@@ -790,14 +790,17 @@ export default function UserDashboard() {
       p_reason: reason,
       p_ride_id: ride.id,
     });
+    const recoveryMessage = isAuthOrPermissionError(error)
+      ? "Could not cancel because your session or ride permission is out of sync. Refresh once or sign in again, then try cancel again."
+      : error?.message;
     setMessage(
-      error ? `Could not cancel: ${error.message}` : "Ride cancelled.",
+      error ? `Could not cancel: ${recoveryMessage}` : "Ride cancelled.",
     );
     if (!error) {
       setCancelTarget(null);
     }
     await loadRides(userId);
-    return error?.message ?? null;
+    return recoveryMessage ?? null;
   }
   const resyncUserData = useCallback(async () => {
     if (userId) {
