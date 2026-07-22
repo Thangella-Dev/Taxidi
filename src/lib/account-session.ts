@@ -112,7 +112,10 @@ async function validateDeviceClaim(
   const { error: touchError } = await supabase.rpc("touch_account_session", {
     p_device_id: deviceId,
   });
-  return !isAuthOrPermissionError(touchError);
+  if (isAuthOrPermissionError(touchError)) {
+    return false;
+  }
+  return !touchError;
 }
 
 export function useSingleDeviceSession(enabled = true) {

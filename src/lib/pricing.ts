@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { calculateFareBreakdown, getVehicleFareQuote } from "@/lib/fare";`r`nimport { getSupabase } from "@/lib/supabase";
 import type { FareCalculationBreakdown, LatLng, VehicleType } from "@/types/database";
 
 export type FareEstimateRequest = {
@@ -34,9 +34,19 @@ export async function calculateTaxiroFareEstimate({
     throw new Error("Route distance is required before calculating fare.");
   }
 
+  const fallback = createFallbackFareBreakdown({
+    at,
+    distanceKm,
+    durationMin,
+    tollCharge,
+    vehicleType,
+    waitingMin,
+    walletCredit,
+  });
+
   const supabase = getSupabase();
   if (!supabase) {
-    throw new Error("Supabase is not configured.");
+    return fallback;
   }
 
   const { data, error } = await supabase.rpc("calculate_taxiro_fare", {
@@ -57,10 +67,71 @@ export async function calculateTaxiroFareEstimate({
   });
 
   if (error) {
-    throw new Error(error.message);
+    if (error.status === 401 || error.status === 403 || error.code === "42501") {
+      return fallback;
+    }
+    console.warn("Taxiro pricing RPC unavailable, using fallback fare", error.message);
+    return fallback;
   }
 
   return normalizeFareBreakdown(data as Partial<FareCalculationBreakdown>);
+}
+
+function createFallbackFareBreakdown({
+  at,
+  distanceKm,
+  durationMin,
+  tollCharge = 0,
+  vehicleType,
+  waitingMin = 0,
+  walletCredit = 0,
+}: Pick<
+  FareEstimateRequest,
+  | "at"
+  | "distanceKm"
+  | "durationMin"
+  | "tollCharge"
+  | "vehicleType"
+  | "waitingMin"
+  | "walletCredit"
+>): FareCalculationBreakdown {
+  const quote = getVehicleFareQuote(distanceKm, at ?? new Date(), vehicleType);
+  const fare = quote.fare ?? 0;
+  const split = calculateFareBreakdown(fare, 0.07);
+  const walletCreditApplied = Math.min(Math.max(walletCredit, 0), fare);
+  return {
+    airport_fee: 0,
+    base_fare: 0,
+    cashback_amount: 0,
+    company_commission_rate: 0.07,
+    coupon_discount: 0,
+    currency: "INR",
+    distance_charge: Math.round((distanceKm ?? 0) * quote.ratePerKm),
+    driver_earning: split.riderEarning ?? Math.round(fare * 0.93),
+    final_fare: fare,
+    free_waiting_minutes: 0,
+    minimum_fare: 0,
+    night_charge: quote.period === "night_peak" ? Math.round((distanceKm ?? 0) * quote.vehicleSurchargePerKm) : 0,
+    platform_commission: split.companyCommission ?? Math.round(fare * 0.07),
+    pricing_rule_id: null,
+    rule_snapshot: {
+      fallback: true,
+      base_rate_per_km: quote.baseRatePerKm,
+      period: quote.period,
+      period_label: quote.periodLabel,
+      vehicle_surcharge_per_km: quote.vehicleSurchargePerKm,
+    },
+    service_area_id: null,
+    subtotal_before_surge: fare,
+    surge_charge: 0,
+    surge_multiplier: 1,
+    tax_amount: 0,
+    time_charge: 0,
+    toll_charge: tollCharge,
+    vehicle_type: vehicleType,
+    waiting_charge: waitingMin > 0 ? 0 : 0,
+    wallet_credit_applied: walletCreditApplied,
+  };
 }
 
 export function normalizeFareBreakdown(

@@ -12,15 +12,23 @@ export function isAuthOrPermissionError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const candidate = error as SupabasePermissionError;
   const message = candidate.message?.toLowerCase() ?? "";
+  const code = candidate.code?.toLowerCase() ?? "";
+
   return (
     candidate.status === 401 ||
     candidate.status === 403 ||
-    candidate.code === "42501" ||
-    candidate.code === "28000" ||
+    code === "42501" ||
+    code === "28000" ||
+    code === "pgrst116" ||
     message.includes("jwt") ||
+    message.includes("not authenticated") ||
     message.includes("permission denied") ||
     message.includes("forbidden") ||
-    message.includes("authentication required")
+    message.includes("authentication required") ||
+    message.includes("row-level security") ||
+    message.includes("rls") ||
+    message.includes("unauthorized") ||
+    message.includes("new row violates")
   );
 }
 
@@ -30,16 +38,24 @@ export async function getCurrentUser(supabase: SupabaseClient) {
     return data.user;
   }
 
-  await supabase.auth.signOut();
+  if (isAuthOrPermissionError(error)) {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Ignore sign-out failures during auth recovery.
+    }
+  }
+
   return null;
 }
 
 export async function getProfile(supabase: SupabaseClient, userId: string) {
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (user?.id === userId) {
+  if (!userError && user?.id === userId) {
     const { data: ownProfile, error: ownProfileError } =
       await supabase.rpc("get_own_profile");
 
@@ -48,11 +64,15 @@ export async function getProfile(supabase: SupabaseClient, userId: string) {
     }
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", userId)
     .maybeSingle();
+
+  if (error && !isAuthOrPermissionError(error)) {
+    return null;
+  }
 
   return data as Profile | null;
 }
@@ -103,6 +123,9 @@ export async function ensureProfile(
       .single();
 
     if (fallbackError) {
+      if (isAuthOrPermissionError(fallbackError)) {
+        return profile as Profile;
+      }
       throw fallbackError;
     }
 
@@ -146,7 +169,11 @@ export async function ensureInitialRiderVehicle(
       rider_id: user.id,
       vehicle_type: vehicleType,
     });
-    if (error) throw error;
+    if (error) {
+      if (!isAuthOrPermissionError(error)) {
+        throw error;
+      }
+    }
   }
 
   if (metadata.license_number) {
@@ -155,7 +182,9 @@ export async function ensureInitialRiderVehicle(
       rider_id: user.id,
       updated_at: new Date().toISOString(),
     });
-    if (error) throw error;
+    if (error && !isAuthOrPermissionError(error)) {
+      throw error;
+    }
   }
 }
 export async function uploadRiderLivePhoto(
@@ -171,13 +200,20 @@ export async function uploadRiderLivePhoto(
       contentType: "image/jpeg",
       upsert: false,
     });
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    if (!isAuthOrPermissionError(uploadError)) {
+      throw uploadError;
+    }
+    return path;
+  }
   const { error } = await supabase.from("rider_profiles").upsert({
     live_selfie_captured_at: new Date().toISOString(),
     live_selfie_path: path,
     rider_id: riderId,
     updated_at: new Date().toISOString(),
   });
-  if (error) throw error;
+  if (error && !isAuthOrPermissionError(error)) {
+    throw error;
+  }
   return path;
 }

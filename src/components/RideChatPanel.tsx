@@ -71,6 +71,7 @@ export function RideChatPanel({
         "postgres_changes",
         { event: "*", schema: "public", table: "ride_chat_messages", filter: `ride_id=eq.${ride.id}` },
         (payload) => {
+          if (!alive) return;
           if (payload.eventType === "DELETE") {
             const deleted = payload.old as Partial<RideChatMessage>;
             if (deleted.id) {
@@ -91,6 +92,7 @@ export function RideChatPanel({
         },
       )
       .subscribe((realtimeStatus) => {
+        if (!alive) return;
         if (realtimeStatus === "SUBSCRIBED") setStatus("Live");
         if (realtimeStatus === "CHANNEL_ERROR" || realtimeStatus === "TIMED_OUT") {
           setStatus("Reconnecting live chat...");
@@ -132,7 +134,11 @@ export function RideChatPanel({
       const sent = data as RideChatMessage;
       setMessages((current) => current.some((item) => item.id === sent.id) ? current : [...current, sent]);
     }
-    setStatus(error ? error.message : "Sent");
+    if (error) {
+      setStatus(error.message);
+    } else {
+      setStatus("Sent");
+    }
     setSending(false);
   }
 

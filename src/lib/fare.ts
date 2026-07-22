@@ -22,6 +22,12 @@ export type FareBreakdown = {
   riderEarning: number | null;
 };
 
+export function getVehicleSurchargePerKm(vehicleType: VehicleType) {
+  if (vehicleType === "auto") return 1;
+  if (["car", "hatchback", "sedan", "suv"].includes(vehicleType)) return 2;
+  return 0;
+}
+
 export function getVehicleFareQuote(
   distanceKm: number | null,
   departureAt: Date | string = new Date(),
@@ -29,14 +35,17 @@ export function getVehicleFareQuote(
 ): VehicleFareQuote {
   const minutes = getIndiaMinutesOfDay(departureAt);
   const period = getPricingPeriod(minutes);
+  const baseRatePerKm = 0;
+  const vehicleSurchargePerKm = 0;
+  const ratePerKm = 0;
   return {
-    fare: distanceKm === null ? null : null,
-    baseRatePerKm: 0,
+    fare: null,
+    baseRatePerKm,
     isPeak: period !== "standard",
     period,
     periodLabel: "Admin pricing required",
-    ratePerKm: 0,
-    vehicleSurchargePerKm: 0,
+    ratePerKm,
+    vehicleSurchargePerKm,
     vehicleType,
   };
 }
