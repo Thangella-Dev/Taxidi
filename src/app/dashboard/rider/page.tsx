@@ -51,6 +51,7 @@ import {
   getProfile,
   isAuthOrPermissionError,
 } from "@/lib/auth";
+import { acceptReadyRideWithFallback } from "@/lib/ride-accept";
 import { getRoutePath, getRouteSummary } from "@/lib/maps";
 import { calculateFareBreakdown, formatMoney } from "@/lib/fare";
 import {
@@ -613,10 +614,15 @@ export default function RiderDashboard() {
     if (!supabase) {
       return;
     }
-    const { error } = await supabase.rpc("accept_ready_ride", {
-      p_ride_id: ride.id,
+    const { error } = await acceptReadyRideWithFallback(supabase, {
+      rideId: ride.id,
+      riderId: profile.id,
     });
-    setMessage(error ? error.message : "Ride accepted. Go to pickup.");
+    setMessage(
+      error
+        ? `Could not accept ride: ${error.message}`
+        : "Ride accepted. Go to pickup.",
+    );
     await loadRiderData(profile.id);
   }
 
