@@ -52,6 +52,7 @@ import {
   isAuthOrPermissionError,
 } from "@/lib/auth";
 import { acceptReadyRideWithFallback } from "@/lib/ride-accept";
+import { verifyRideCodeWithFallback } from "@/lib/ride-verification";
 import { getRoutePath, getRouteSummary } from "@/lib/maps";
 import { calculateFareBreakdown, formatMoney } from "@/lib/fare";
 import {
@@ -639,11 +640,14 @@ export default function RiderDashboard() {
     if (!supabase) {
       return;
     }
-    const { error } = await supabase.rpc("verify_ride_code", {
-      p_code: code,
-      p_ride_id: ride.id,
+    const { error } = await verifyRideCodeWithFallback(supabase, {
+      code,
+      rideId: ride.id,
+      riderId: profile.id,
     });
-    setMessage(error ? error.message : "Code verified. Ride started.");
+    setMessage(
+      error ? `Could not verify code: ${error.message}` : "Code verified. Ride started.",
+    );
     await loadRiderData(profile.id);
   }
 
