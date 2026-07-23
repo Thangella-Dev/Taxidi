@@ -7,6 +7,37 @@
 
 ## Executive Assessment
 
+## 23 July 2026 Production Pricing And Supabase Reliability Update
+
+Completed real engineering work today:
+
+- Added resilient fare fallback logic when Supabase `calculate_taxiro_fare` returns `403` or becomes unavailable.
+- Implemented fallback pilot pricing: Rs 7/km standard, Rs 8/km peak, Auto + Rs 1/km, and Car-family + Rs 2/km.
+- Added session-level suppression for repeat failed fare RPC calls to reduce production console/API spam.
+- Fixed booking inserts so `fare_rate_per_km` and `vehicle_surcharge_per_km` align with the selected vehicle category.
+- Added route fallback behavior for OSRM network failures so route distance/ETA still resolve from coordinates.
+- Added migration `20260723100000_pricing_permission_and_fallback_repair.sql` for stale fare constraints, vehicle surcharge validation, fare audit policy repair, RPC grants, anon revokes, and PostgREST schema reload.
+- Applied the Supabase migration to the live project successfully.
+
+Verification completed today:
+
+```bash
+npm run db:validate
+npm run typecheck
+npm run lint
+npm run build
+git diff --check
+```
+
+Results:
+
+- 40 additive Supabase migrations validated.
+- TypeScript passed.
+- ESLint passed.
+- Next.js 16.2.7 production build passed with 24 app routes.
+- Git whitespace validation passed.
+
+
 ## 21 July 2026 Enterprise Pricing And Revenue System Update
 
 Completed real engineering work today:

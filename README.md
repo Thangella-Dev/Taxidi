@@ -117,6 +117,11 @@ The MVP currently includes:
 - Supabase RPC `calculate_taxiro_fare` now calculates complete fare breakdowns from admin-managed pricing rules and logs every calculation for audit.
 - Supabase RPC `attach_ride_fare_breakdown` stores the final fare breakdown against the booked ride for later admin/revenue review.
 - Admin commercial controls now create service areas, full vehicle pricing rules, surge rules, coupons, Taxiro Plus-style subscriptions, and driver bonus rules from the dashboard.
+- Fare preview now has a production-safe fallback when `calculate_taxiro_fare` returns a permission error or is temporarily unavailable.
+- Fallback pricing follows Taxiro pilot rules: Rs 7/km standard, Rs 8/km peak, Auto + Rs 1/km, and car-family vehicles + Rs 2/km.
+- Booking now stores vehicle-compatible `fare_rate_per_km` and `vehicle_surcharge_per_km` values so database fare constraints do not block valid rides.
+- OSRM network changes now fall back to coordinate-based distance/ETA estimation instead of throwing `Failed to fetch` in the app.
+- Supabase pricing/cancellation permission repair migration `20260723100000_pricing_permission_and_fallback_repair.sql` has been added and applied live.
 
 ## Main Routes
 

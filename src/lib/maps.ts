@@ -68,24 +68,57 @@ export async function reverseGeocode(point: LatLng): Promise<string | null> {
 }
 export async function getRouteSummary(pickup: LatLng, drop: LatLng) {
   const coords = `${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}`;
-  const response = await fetch(
-    `${osrmBase}/route/v1/driving/${coords}?overview=full&geometries=polyline`,
-  );
 
-  if (!response.ok) {
-    return { distanceKm: null, durationMin: null, polyline: null };
+  try {
+    const response = await fetch(
+      `${osrmBase}/route/v1/driving/${coords}?overview=full&geometries=polyline`,
+    );
+
+    if (!response.ok) {
+      return getFallbackRouteSummary(pickup, drop);
+    }
+
+    const data = (await response.json()) as {
+      routes?: Array<{ distance: number; duration: number; geometry: string }>;
+    };
+    const route = data.routes?.[0];
+
+    if (!route) {
+      return getFallbackRouteSummary(pickup, drop);
+    }
+
+    return {
+      distanceKm: Number((route.distance / 1000).toFixed(2)),
+      durationMin: Math.round(route.duration / 60),
+      polyline: route.geometry ?? null,
+    };
+  } catch {
+    return getFallbackRouteSummary(pickup, drop);
   }
+}
 
-  const data = (await response.json()) as {
-    routes?: Array<{ distance: number; duration: number; geometry: string }>;
-  };
-  const route = data.routes?.[0];
-
+function getFallbackRouteSummary(pickup: LatLng, drop: LatLng) {
+  const distanceKm = Number((distanceKmBetween(pickup, drop) * 1.25).toFixed(2));
   return {
-    distanceKm: route ? Number((route.distance / 1000).toFixed(2)) : null,
-    durationMin: route ? Math.round(route.duration / 60) : null,
-    polyline: route?.geometry ?? null,
+    distanceKm,
+    durationMin: Math.max(1, Math.round((distanceKm / 28) * 60)),
+    polyline: null,
   };
+}
+
+function distanceKmBetween(from: LatLng, to: LatLng) {
+  const earthRadiusKm = 6371;
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = radians(to.lat - from.lat);
+  const longitudeDelta = radians(to.lng - from.lng);
+  const fromLatitude = radians(from.lat);
+  const toLatitude = radians(to.lat);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
 export async function getRoutePath(pickup: LatLng, drop: LatLng): Promise<LatLng[]> {

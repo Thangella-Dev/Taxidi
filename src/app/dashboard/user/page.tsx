@@ -62,6 +62,7 @@ import {
   formatMoney,
   getUserCancellationFine,
   getVehicleFareQuote,
+  getVehicleSurchargePerKm,
 } from "@/lib/fare";
 import {
   calculateConfiguredFare,
@@ -722,6 +723,23 @@ export default function UserDashboard() {
     }
     setLiveFareEstimate(fareBreakdown);
     const fareEstimate = fareBreakdown.final_fare;
+    const fallbackQuote = getVehicleFareQuote(
+      summary.distanceKm,
+      rideTime,
+      vehicleType,
+    );
+    const fareRatePerKm =
+      fareBreakdown.rule_snapshot?.fallback === true
+        ? fallbackQuote.baseRatePerKm
+        : summary.distanceKm
+          ? Number(
+              Math.max(
+                fareBreakdown.distance_charge / summary.distanceKm -
+                  getVehicleSurchargePerKm(vehicleType),
+                0,
+              ).toFixed(2),
+            )
+          : null;
     const { data: createdRide, error } = await supabase
       .from("ride_requests")
       .insert({
@@ -732,8 +750,8 @@ export default function UserDashboard() {
         drop_lng: drop.lng,
         estimated_duration_min: summary.durationMin,
         fare_estimate: fareEstimate,
-        fare_rate_per_km: null,
-        vehicle_surcharge_per_km: 0,
+        fare_rate_per_km: fareRatePerKm,
+        vehicle_surcharge_per_km: getVehicleSurchargePerKm(vehicleType),
         vehicle_type: vehicleType,
         service_area_id:
           fareBreakdown.service_area_id ?? serviceDecision.area?.id ?? null,
@@ -956,21 +974,26 @@ export default function UserDashboard() {
       vehicleType,
     );
     if (liveFareEstimate) {
+      const isFallback = liveFareEstimate.rule_snapshot?.fallback === true;
+      const effectiveRate = routeSummary?.distanceKm
+        ? liveFareEstimate.distance_charge / routeSummary.distanceKm
+        : fallbackFare.ratePerKm;
       return {
         ...fallbackFare,
-        baseRatePerKm: routeSummary?.distanceKm
-          ? liveFareEstimate.distance_charge / routeSummary.distanceKm
-          : 0,
+        baseRatePerKm: isFallback
+          ? fallbackFare.baseRatePerKm
+          : Math.max(effectiveRate - getVehicleSurchargePerKm(vehicleType), 0),
         fare: liveFareEstimate.final_fare,
-        isPeak: liveFareEstimate.surge_multiplier > 1,
-        periodLabel:
-          liveFareEstimate.surge_multiplier > 1
+        isPeak: isFallback
+          ? fallbackFare.isPeak
+          : liveFareEstimate.surge_multiplier > 1,
+        periodLabel: isFallback
+          ? `${fallbackFare.periodLabel} fallback fare`
+          : liveFareEstimate.surge_multiplier > 1
             ? `${liveFareEstimate.surge_multiplier.toFixed(2)}x surge applied`
             : "Admin configured fare",
-        ratePerKm: routeSummary?.distanceKm
-          ? liveFareEstimate.distance_charge / routeSummary.distanceKm
-          : 0,
-        vehicleSurchargePerKm: 0,
+        ratePerKm: isFallback ? fallbackFare.ratePerKm : effectiveRate,
+        vehicleSurchargePerKm: getVehicleSurchargePerKm(vehicleType),
       };
     }
     if (!pickup || !drop) return fallbackFare;
@@ -999,8 +1022,8 @@ export default function UserDashboard() {
       ),
       isPeak: false,
       periodLabel: "Admin configured fare",
-      ratePerKm: configuredRule.per_km_rate,
-      vehicleSurchargePerKm: 0,
+      ratePerKm: configuredRule.per_km_rate + getVehicleSurchargePerKm(vehicleType),
+      vehicleSurchargePerKm: getVehicleSurchargePerKm(vehicleType),
     };
   }, [
     bookingMode,
