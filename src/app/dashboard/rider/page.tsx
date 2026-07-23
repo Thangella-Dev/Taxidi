@@ -73,6 +73,8 @@ import type {
   VehicleType,
 } from "@/types/database";
 
+type DriverCollectionMethod = "cash" | "driver_direct_upi";
+
 const DEMAND_RADIUS_KM = 2;
 const SCHEDULED_DEMAND_LOOKAHEAD_HOURS = 6;
 
@@ -711,10 +713,40 @@ export default function RiderDashboard() {
     const { error } = await supabase.rpc("confirm_ride_payment_and_complete", {
       p_ride_id: ride.id,
     });
+    const walletFailed = error?.message
+      ?.toLowerCase()
+      .includes("wallet balance is insufficient");
     setMessage(
       error
-        ? error.message
+        ? walletFailed
+          ? "Customer wallet has insufficient balance. Switch this ride to Cash or UPI, collect payment, then complete the ride."
+          : error.message
         : "Payment received. Ride completed and you are available again.",
+    );
+    await loadRiderData(profile.id);
+  }
+
+  async function switchRidePaymentMethod(
+    ride: RideRequest,
+    method: DriverCollectionMethod,
+  ) {
+    if (!profile) {
+      return;
+    }
+    const supabase = getSupabase();
+    if (!supabase) {
+      return;
+    }
+    const { error } = await supabase.rpc("switch_ride_payment_method", {
+      p_payment_method: method,
+      p_ride_id: ride.id,
+    });
+    setMessage(
+      error
+        ? `Could not switch payment method: ${error.message}`
+        : method === "cash"
+          ? "Payment method switched to Cash. Collect fare and complete the ride."
+          : "Payment method switched to UPI. Show your QR/UPI ID, collect fare, then complete the ride.",
     );
     await loadRiderData(profile.id);
   }
@@ -1004,6 +1036,9 @@ export default function RiderDashboard() {
                 void confirmPaymentAndComplete(activeRide)
               }
               onStart={() => void verifyAndStart(activeRide)}
+              onSwitchPaymentMethod={(method) =>
+                void switchRidePaymentMethod(activeRide, method)
+              }
               ride={activeRide}
             />
           ) : (
@@ -1565,6 +1600,7 @@ function ActiveRiderJob({
   onPaymentReceived,
   onReachedDrop,
   onStart,
+  onSwitchPaymentMethod,
   ride,
 }: {
   code: string;
@@ -1582,6 +1618,7 @@ function ActiveRiderJob({
   onPaymentReceived: () => void;
   onReachedDrop: () => void;
   onStart: () => void;
+  onSwitchPaymentMethod: (method: DriverCollectionMethod) => void;
   ride: RideRequest;
 }) {
   const destination = ride.status === "assigned" ? "pickup" : "drop";
@@ -1748,6 +1785,39 @@ function ActiveRiderJob({
           </div>
           {ride.payment_status === "awaiting_payment" ? (
             <div className="mt-4 rounded-lg bg-white p-3 text-[#101713]">
+              {ride.payment_method === "wallet" ||
+              ride.payment_method === "partial_wallet_online" ? (
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  <p className="font-black">Wallet payment selected</p>
+                  <p className="mt-1 text-xs leading-5">
+                    If the customer wallet has no balance, switch to Cash or
+                    UPI, collect the fare directly, then complete the ride.
+                  </p>
+                </div>
+              ) : null}
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <Button
+                  className="h-11 rounded-lg"
+                  onClick={() => onSwitchPaymentMethod("cash")}
+                  type="button"
+                  variant={ride.payment_method === "cash" ? "default" : "outline"}
+                >
+                  Collect Cash
+                </Button>
+                <Button
+                  className="h-11 rounded-lg"
+                  onClick={() => onSwitchPaymentMethod("driver_direct_upi")}
+                  type="button"
+                  variant={
+                    ride.payment_method === "upi" ||
+                    ride.payment_method === "driver_direct_upi"
+                      ? "default"
+                      : "outline"
+                  }
+                >
+                  Collect UPI
+                </Button>
+              </div>
               {ride.payment_method === "upi" ||
               ride.payment_method === "driver_direct_upi" ? (
                 <div className="grid gap-3 text-center">
